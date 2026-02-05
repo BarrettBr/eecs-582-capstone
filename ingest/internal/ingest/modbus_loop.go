@@ -44,8 +44,8 @@ func (m *ModbusLoop) Run(ctx context.Context) error {
 
 func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	// Basicallly all placeholder for now, eventually we will want to actually read in that data
-    _ = ctx
+	_ = ctx
 	_ = m.queries
-    log.Println("modbus ingest tick")
+	log.Println("modbus ingest tick")
 	return nil
 }
