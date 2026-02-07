@@ -4,23 +4,30 @@ package ingest
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	"github.com/goburrow/modbus"
 )
 
 type ModbusLoop struct {
-	queries  *database.Queries
+	client modbus.Client
+    queries  *database.Queries
 	interval time.Duration
 }
 
-func NewModbusLoop(queries *database.Queries, interval time.Duration) *ModbusLoop {
-	if interval <= 0 {
+func NewModbusLoop(queries *database.Queries, interval time.Duration, address string) *ModbusLoop {
+	handler := modbus.NewTCPClientHandler(address) // We could use NewRTUClientHandler instead if connecting over serial. Maybe some way to tell?
+    handler.Timeout = 10 * time.Second
+    client := modbus.NewClient(handler)
+    if interval <= 0 {
 		interval = 5 * time.Second
 	}
 	return &ModbusLoop{
-		queries:  queries,
+		client: client,
+        queries:  queries,
 		interval: interval,
 	}
 }
@@ -43,9 +50,16 @@ func (m *ModbusLoop) Run(ctx context.Context) error {
 }
 
 func (m *ModbusLoop) handleTick(ctx context.Context) error {
-	// Basicallly all placeholder for now, eventually we will want to actually read in that data
-	_ = ctx
-	_ = m.queries
-	log.Println("modbus ingest tick")
+	select {
+    case <-ctx.Done():
+        return ctx.Err()
+    default:
+    }
+    results, err := m.client.ReadHoldingRegisters(0, 1)
+    if err != nil {
+        return err
+    }
+    counter := binary.BigEndian.Uint16(results)
+	log.Printf("Modbus Results: %v\n", counter)
 	return nil
 }
