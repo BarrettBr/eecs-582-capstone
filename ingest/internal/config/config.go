@@ -18,12 +18,14 @@ type Config struct {
 	SQLitePath         string
 	MigrationsPath     string
 	ModbusPollInterval time.Duration
+    ModbusAdress       string
 }
 
 // Creates and returns a config struct using fallbacks if envs not found
 func Load() (*Config, error) {
 	sqlitePath := getEnv("SQLITE_PATH", "./data/app.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
+    modbusAddress := getEnv("MODBUS_ADDRESS", "localhost:502")
 
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
 		return nil, fmt.Errorf("Error ensuring sqlite db file: %w", err)
@@ -52,6 +54,7 @@ func Load() (*Config, error) {
 		SQLitePath:         sqlitePath,
 		MigrationsPath:     migrationsPath,
 		ModbusPollInterval: modbusPollInterval,
+        ModbusAdress:       modbusAddress,
 	}, nil
 }
 
