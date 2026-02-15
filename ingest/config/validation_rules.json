@@ -7,7 +7,7 @@
     "temperature",
     "heater_power"
   ],
-  "numeric_bounds": {
+  "bounds": {
     "temperature": {
       "min": -100.0,
       "max": 200.0
