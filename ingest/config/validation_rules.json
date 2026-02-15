@@ -1,0 +1,32 @@
+{
+  "required_fields": [
+    "id",
+    "timestamp",
+    "sensor_type",
+    "sensor_number",
+    "temperature",
+    "heater_power"
+  ],
+  "numeric_bounds": {
+    "temperature": {
+      "min": -100.0,
+      "max": 200.0
+    },
+    "heater_power": {
+      "min": 0.0,
+      "max": 100.0
+    },
+    "sensor_number": {
+      "min": 0.0,
+      "max": 50.0
+    }
+  },
+  "anomaly_rules": [
+    {
+      "field": "temperature",
+      "op": ">",
+      "value": 75.0,
+      "label": "temperature_high"
+    }
+  ]
+}
