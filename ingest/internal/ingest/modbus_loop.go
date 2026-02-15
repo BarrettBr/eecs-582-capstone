@@ -1,10 +1,9 @@
 package ingest
 
-// This file is mainlyy placeholder for now, it will probably change dramatically as we add in the actual modbus data
-
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -29,7 +28,7 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 
 	client := modbus.NewClient(handler)
 	if interval <= 0 {
-		interval = 5 * time.Second
+		interval = 500 * time.Second
 	}
 
 	return &ModbusLoop{
@@ -63,11 +62,37 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 		return ctx.Err()
 	default:
 	}
-	results, err := m.client.ReadHoldingRegisters(m.mwBase, 1)
+	results, err := m.client.ReadHoldingRegisters(m.mwBase, 6)
 	if err != nil {
 		return err
 	}
-	counter := binary.BigEndian.Uint16(results)
-	log.Printf("Modbus Results: %v\n", counter)
+	id := binary.BigEndian.Uint16(results[0:2])
+	typeCode := binary.BigEndian.Uint16(results[2:4])
+	sensorNum := binary.BigEndian.Uint16(results[4:6])
+	fanOnU := binary.BigEndian.Uint16(results[6:8])
+
+	tempX10 := int16(binary.BigEndian.Uint16(results[8:10]))
+	heaterX100 := int16(binary.BigEndian.Uint16(results[10:12]))
+
+	s := TempSample{
+		ID:           id,
+		SensorType:   sensorTypeFromCode(typeCode),
+		SensorNumber: sensorNum,
+		FanOn:        fanOnU != 0,
+		Temperature:  float64(tempX10) / 10.0,
+		HeaterPower:  float64(heaterX100) / 100.0,
+	}
+
+	b, _ := json.Marshal(s)
+	log.Printf("sample=%s", b)
 	return nil
+}
+
+func sensorTypeFromCode(code uint16) string {
+	switch code {
+	case 1:
+		return "temperature_control_system"
+	default:
+		return "unknown"
+	}
 }
