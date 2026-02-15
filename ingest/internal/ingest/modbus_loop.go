@@ -18,12 +18,13 @@ type ModbusLoop struct {
 	queries     *database.Queries
 	interval    time.Duration
 	mwBase      uint16
+	validator   *RuleEngine
 	sample      TempSample
 	jsonBuf     bytes.Buffer  // Writer that stores bytes for logging
 	jsonEncoder *json.Encoder // Converts struct -> Json
 }
 
-func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16) *ModbusLoop {
+func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string) *ModbusLoop {
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
 	handler.SlaveId = 1
@@ -35,12 +36,17 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
+	validator, err := NewRuleEngine(ValidationFilePath)
+	if err != nil {
+		log.Fatalf("Validation spec load failed (%s): %v", ValidationFilePath, err)
+	}
 
 	loop := &ModbusLoop{
-		client:   client,
-		queries:  queries,
-		interval: interval,
-		mwBase:   mwBase,
+		client:    client,
+		queries:   queries,
+		interval:  interval,
+		mwBase:    mwBase,
+		validator: validator,
 	}
 	loop.jsonEncoder = json.NewEncoder(&loop.jsonBuf)
 	loop.jsonEncoder.SetEscapeHTML(false) // Shouldn't matter atm due to us sending int / uints back but a later protection
@@ -74,9 +80,14 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := m.dataValidaterAndNormalizer(results); err != nil {
+	if err := m.dataNormalizer(results); err != nil {
 		return err
 	}
+	validation := m.validator.Validate(&m.sample)
+	if !validation.Valid {
+		return fmt.Errorf("Validation failed: %v", validation.Errors)
+	}
+	m.sample.Anomalies = validation.Anomalies
 
 	m.jsonBuf.Reset()
 	if err := m.jsonEncoder.Encode(&m.sample); err != nil {
@@ -89,7 +100,7 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	return nil
 }
 
-func (m *ModbusLoop) dataValidaterAndNormalizer(results []byte) error {
+func (m *ModbusLoop) dataNormalizer(results []byte) error {
 	// 2 bytes per register * 6 registers = 12 bytes.
 	if len(results) != 12 {
 		return fmt.Errorf("Invalid size: got %d bytes", len(results))
@@ -103,6 +114,7 @@ func (m *ModbusLoop) dataValidaterAndNormalizer(results []byte) error {
 
 	// Later change to better fit the actual dataset properly this is mainly filler till we swap to simulink to get data flowing
 	m.sample.ID = binary.BigEndian.Uint16(results[0:2])
+	m.sample.Timestamp = nowUTC()
 	m.sample.SensorType = sensorType
 	m.sample.SensorNumber = binary.BigEndian.Uint16(results[4:6])
 	m.sample.FanOn = binary.BigEndian.Uint16(results[6:8]) == 1

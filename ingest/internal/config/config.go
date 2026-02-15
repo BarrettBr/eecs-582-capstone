@@ -19,8 +19,9 @@ type Config struct {
 	SQLitePath         string
 	MigrationsPath     string
 	ModbusPollInterval time.Duration
-	ModbusAdress       string
+	ModbusAddress      string
 	ModbusMWBase       uint16 // uint since modbus usually expects these
+	ValidationFilePath string
 }
 
 // Creates and returns a config struct using fallbacks if envs not found
@@ -28,6 +29,7 @@ func Load() (*Config, error) {
 	sqlitePath := getEnv("SQLITE_PATH", "./data/app.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
 	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
+	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
 
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
 		return nil, fmt.Errorf("Error ensuring sqlite db file: %w", err)
@@ -62,8 +64,9 @@ func Load() (*Config, error) {
 		SQLitePath:         sqlitePath,
 		MigrationsPath:     migrationsPath,
 		ModbusPollInterval: modbusPollInterval,
-		ModbusAdress:       modbusAddress,
+		ModbusAddress:      modbusAddress,
 		ModbusMWBase:       modbusMWBase,
+		ValidationFilePath: ValidationFilePath,
 	}, nil
 }
 
