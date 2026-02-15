@@ -3,8 +3,7 @@ import Index from "../components/Index.vue";
 </script>
 
 <template>
-  <main>
-    <Index />
-  </main>
+	<main>
+		<Index />
+	</main>
 </template>
-
