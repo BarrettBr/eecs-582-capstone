@@ -1,7 +1,7 @@
 # OpenPLC Runtime v4 Reference
 
 This document captures setup decisions and issues encountered while integrating OpenPLC Runtime v4 with this project
-A lot of the file locations below are listed based on linux, however it should be very similar in windows just look for it's install location and lok at relative pathing
+A lot of the file locations below are listed based on linux, however it should be very similar in windows just look for it's install location and look at relative pathing
 
 ## Framework
 
@@ -34,7 +34,7 @@ A lot of the file locations below are listed based on linux, however it should b
 ## Modbus TCP Plugin
 
 OpenPLC Runtime v4 uses plugins, and Modbus TCP could be disabled by default depending on your OS.
-This is used to actually transport the data over to our ingestion service so it is needed to recieve it on our side.
+This is used to actually transport the data over to our ingestion service so it is needed to receive it on our side.
 
 1. Open plugin config:
    - `/opt/openplc-runtime/plugins.conf`

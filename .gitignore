@@ -30,6 +30,7 @@ bin/
 *.test
 coverage.out
 ingest/eecs-582-capstone
+ingest/app.db
 
 logs/
 tmp/
