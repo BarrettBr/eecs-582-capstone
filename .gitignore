@@ -29,6 +29,7 @@ bin/
 *.out
 *.test
 coverage.out
+ingest/eecs-582-capstone
 
 logs/
 tmp/
