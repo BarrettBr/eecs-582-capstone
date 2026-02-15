@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
@@ -18,14 +19,15 @@ type Config struct {
 	SQLitePath         string
 	MigrationsPath     string
 	ModbusPollInterval time.Duration
-    ModbusAdress       string
+	ModbusAdress       string
+	ModbusMWBase       uint16 // uint since modbus usually expects these
 }
 
 // Creates and returns a config struct using fallbacks if envs not found
 func Load() (*Config, error) {
 	sqlitePath := getEnv("SQLITE_PATH", "./data/app.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
-    modbusAddress := getEnv("MODBUS_ADDRESS", "localhost:502")
+	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
 
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
 		return nil, fmt.Errorf("Error ensuring sqlite db file: %w", err)
@@ -47,6 +49,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	modbusMWBase, err := getUint16Env("MODBUS_MW_BASE", 1024)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	return &Config{
 		DB:                 db,
 		Queries:            database.New(db),
@@ -54,7 +62,8 @@ func Load() (*Config, error) {
 		SQLitePath:         sqlitePath,
 		MigrationsPath:     migrationsPath,
 		ModbusPollInterval: modbusPollInterval,
-        ModbusAdress:       modbusAddress,
+		ModbusAdress:       modbusAddress,
+		ModbusMWBase:       modbusMWBase,
 	}, nil
 }
 
@@ -72,6 +81,20 @@ func getDurationEnv(key string, fallback time.Duration) (time.Duration, error) {
 			return 0, fmt.Errorf("Parse MODBUS_POLL_INTERVAL Error %s: %w", key, err)
 		}
 		return d, nil
+	}
+	return fallback, nil
+}
+
+func getUint16Env(key string, fallback uint16) (uint16, error) {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("Parse %s Error: %w", key, err)
+		}
+		if n < 0 || n > 65535 {
+			return 0, fmt.Errorf("%s must be between 0 and 65535", key)
+		}
+		return uint16(n), nil
 	}
 	return fallback, nil
 }
