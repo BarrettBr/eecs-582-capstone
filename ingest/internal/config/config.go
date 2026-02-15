@@ -43,7 +43,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("Error pinging sqlite db: %w", err)
 	}
 
-	modbusPollInterval, err := getDurationEnv("MODBUS_POLL_INTERVAL", 5*time.Second)
+	modbusPollInterval, err := getDurationEnv("MODBUS_POLL_INTERVAL", 5*time.Millisecond)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
