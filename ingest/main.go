@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// Create context that is canceled upon ctrl + c so it cancels the modbus loop
-	modbusLoop := ingest.NewModbusLoop(appCfg.Queries, appCfg.ModbusPollInterval, appCfg.ModbusAdress)
+	modbusLoop := ingest.NewModbusLoop(appCfg.Queries, appCfg.ModbusPollInterval, appCfg.ModbusAdress, appCfg.ModbusMWBase)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
