@@ -22,6 +22,9 @@ type ModbusLoop struct {
 	sample      TempSample
 	jsonBuf     bytes.Buffer  // Writer that stores bytes for logging
 	jsonEncoder *json.Encoder // Converts struct -> Json
+	mlCh        chan fanoutEvent
+	sqlCh       chan fanoutEvent
+	wsCh        chan fanoutEvent
 }
 
 func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string) *ModbusLoop {
@@ -47,6 +50,9 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 		interval:  interval,
 		mwBase:    mwBase,
 		validator: validator,
+		mlCh:      make(chan fanoutEvent, 128),
+		sqlCh:     make(chan fanoutEvent, 128),
+		wsCh:      make(chan fanoutEvent, 128),
 	}
 	loop.jsonEncoder = json.NewEncoder(&loop.jsonBuf)
 	loop.jsonEncoder.SetEscapeHTML(false) // Shouldn't matter atm due to us sending int / uints back but a later protection
@@ -54,6 +60,8 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 }
 
 func (m *ModbusLoop) Run(ctx context.Context) error {
+	m.startFanoutWorkers(ctx)
+
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
@@ -94,9 +102,11 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 		return fmt.Errorf("Encode sample json: %w", err)
 	}
 
-	// Print for now
-	payload := m.jsonBuf.Bytes()
-	log.Printf("Sample=%s", payload)
+	// Copy -> Fanout as it is overwritten we don't want a pointer to it
+	sample := m.sample
+	sample.Anomalies = append([]string(nil), m.sample.Anomalies...)
+	payload := append([]byte(nil), m.jsonBuf.Bytes()...)
+	m.fanOut(fanoutEvent{sample: sample, payload: payload})
 	return nil
 }
 
