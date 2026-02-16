@@ -1,3 +1,14 @@
+//Name: index.ts
+//Description: Used to configure the routes to convert from a URL to a view component for App.vue
+//Programmers: Adam Berry 
+//Creation Date: 2/14
+//Revision Dates: Adam Berry 2/14, Adam Berry 2/15
+//Preconditions: Not Relevant
+//Postconditions: Not Relevant
+//Error Types: Not Relevant
+//Invariants: Dependencies described in /Docs/web.md
+//Known Faults: None
+
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 import DashboardView from "../views/DashboardView.vue";
