@@ -1,5 +1,42 @@
 package ingest
 
+/*
+Name: ingest/internal/ingest/validation.go
+Description: Loads declarative validation rules and evaluates incoming samples for required fields, bounds, and anomaly labels.
+Programmer: Barrett Brown
+Date Created: 2026-02-01
+Dates Revised: 2026-02-15
+Revision History:
+- 2026-02-13, Barrett Brown: Created file and started structing out
+- 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+Preconditions:
+- Validation rule JSON exists and is syntactically correct for expected schema.
+- Samples are struct or pointer-to-struct values for reflection-based extraction.
+Acceptable Input Values/Types:
+- JSON rules with required_fields ([]string), bounds (field->min/max), and anomaly_rules.
+- Sample values containing numeric types supported by asFloat64.
+Unacceptable Input Values/Types:
+- Non-struct sample values for Validate.
+- Unsupported comparison operators in anomaly rules.
+- Non-numeric values for fields expected to be numeric.
+Postconditions:
+- Validate returns deterministic ValidationResult for the given rules and sample snapshot.
+Return Values/Types:
+- NewRuleEngine: (*RuleEngine, error)
+- Validate: ValidationResult
+- Helper functions return typed parse/compare outputs and error indicators.
+Error/Exception Conditions:
+- Rule file read/unmarshal failures.
+- Operator/type mismatch conditions reported through ValidationResult errors.
+Side Effects:
+- Reads rules from disk in NewRuleEngine; otherwise pure in-memory processing.
+Invariants:
+- RuleEngine.spec remains unchanged during validation execution.
+- Missing numeric fields are treated as absent unless marked required.
+Known Faults:
+- Reflection-based mapping can incur overhead and may miss complex nested semantics.
+*/
+
 import (
 	"encoding/json"
 	"fmt"
@@ -8,17 +45,26 @@ import (
 	"strings"
 )
 
+// description: Declarative validation definition loaded from JSON config.
+// input: JSON file fields required_fields, bounds, and anomaly_rules.
+// output: Used by RuleEngine to validate and annotate incoming samples.
 type ValidationSpec struct {
 	RequiredFields []string          `json:"required_fields"`
 	Bounds         map[string]Bounds `json:"bounds"`
 	AnomalyRules   []AnomalyRule     `json:"anomaly_rules"`
 }
 
+// description: Numeric min/max bound constraints for a sample field.
+// input: Optional Min and Max float pointers from config.
+// output: Applied by validation to detect out-of-range values.
 type Bounds struct {
 	Min *float64 `json:"min,omitempty"`
 	Max *float64 `json:"max,omitempty"`
 }
 
+// description: Rule defining anomaly detection using a comparison operator on one field.
+// input: Field name, operator token, threshold value, and anomaly label.
+// output: Produces labeled anomaly entries when comparison matches.
 type AnomalyRule struct {
 	Field string  `json:"field"`
 	Op    string  `json:"op"`
@@ -26,17 +72,25 @@ type AnomalyRule struct {
 	Label string  `json:"label"`
 }
 
+// description: Result object returned after validating one sample.
+// input: Aggregated errors/anomaly labels produced by RuleEngine checks.
+// output: Valid flag plus detailed errors and anomaly labels.
 type ValidationResult struct {
 	Valid     bool
 	Errors    []string
 	Anomalies []string
 }
 
+// description: Validation executor built from a loaded ValidationSpec.
+// input: spec loaded from JSON rules file.
+// output: Provides Validate to evaluate samples consistently each tick.
 type RuleEngine struct {
 	spec ValidationSpec
 }
 
-// Fills out the rule engine based off of the rules file
+// description: Loads validation rules from disk and constructs a RuleEngine.
+// input: specPath (path to validation JSON rules).
+// output: Returns initialized RuleEngine or an error on read/parse failures.
 func NewRuleEngine(specPath string) (*RuleEngine, error) {
 	content, err := os.ReadFile(specPath)
 	if err != nil {
@@ -54,8 +108,9 @@ func NewRuleEngine(specPath string) (*RuleEngine, error) {
 	return &RuleEngine{spec: spec}, nil
 }
 
-// Validates a sample against the rule engine, appending errors and then
-// Returning the result of this
+// description: Validates one sample against required fields, bounds, and anomaly rules.
+// input: sample (struct or pointer-to-struct containing json-tagged fields).
+// output: Returns ValidationResult with validity status, errors, and anomaly labels.
 func (e *RuleEngine) Validate(sample any) ValidationResult {
 	record, ok := structToRecord(sample)
 	if !ok {
@@ -125,10 +180,9 @@ func (e *RuleEngine) Validate(sample any) ValidationResult {
 	return result
 }
 
-// ------ Helper Function ------
-
-// Change this down the line, just ripped some code for ezpz testing
-// But don't really know reflection or how this works
+// description: Converts a struct sample into a map keyed by JSON tag (or field name fallback).
+// input: sample (struct or pointer-to-struct).
+// output: Returns record map and true on success; empty map and false on invalid input.
 func structToRecord(sample any) (map[string]any, bool) {
 	record := make(map[string]any)
 
@@ -166,6 +220,9 @@ func structToRecord(sample any) (map[string]any, bool) {
 	return record, true
 }
 
+// description: Compares two float64 values using a string operator token.
+// input: left operand, op token (>, >=, <, <=, ==, !=), right operand.
+// output: Returns comparison result or error for unsupported operators.
 func compareFloat(left float64, op string, right float64) (bool, error) {
 	switch op {
 	case ">":
@@ -185,6 +242,9 @@ func compareFloat(left float64, op string, right float64) (bool, error) {
 	}
 }
 
+// description: Normalizes supported numeric Go types into float64.
+// input: value (any numeric primitive type).
+// output: Returns converted float64 and true, or zero and false if non-numeric.
 func asFloat64(value any) (float64, bool) {
 	// Helper function that just goes over the number types and cast them all to float64
 	switch x := value.(type) {
@@ -217,6 +277,9 @@ func asFloat64(value any) (float64, bool) {
 	}
 }
 
+// description: Detects missing values for validation-required checks.
+// input: value (any field value).
+// output: Returns true for nil or empty/whitespace strings, false otherwise.
 func isMissingValue(value any) bool {
 	if value == nil {
 		return true
@@ -228,9 +291,9 @@ func isMissingValue(value any) bool {
 	return false
 }
 
-// Looks up field in record and returns a float64
-// bool represents success and string is the error
-// false + "" = missing / absent so up to caller to define handling
+// description: Retrieves a field from a record and coerces it to float64 when possible.
+// input: record map and field key.
+// output: Returns number, found flag, and error message; missing fields return found=false with empty error.
 func getFloatNumber(record map[string]any, field string) (float64, bool, string) {
 	value, exists := record[field]
 	if !exists || isMissingValue(value) {
