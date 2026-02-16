@@ -8,7 +8,8 @@ import { RouterLink, RouterView } from "vue-router";
 			<h2 class="title">Sentinel Monitoring System</h2>
 
 			<nav class="nav">
-				<RouterLink to="/">Dashboard</RouterLink>
+				<RouterLink to="/">Home</RouterLink>
+				<RouterLink to="/dashboard">Dashboard</RouterLink>
 				<RouterLink to="/about">About</RouterLink>
 			</nav>
 		</header>
