@@ -2,7 +2,7 @@ package config
 
 /*
 Name: ingest/internal/config/config.go
-Description: Loads, validates, and materializes runtime configuration and shared dependencies for the ingest service.
+Description: Reads app settings from env vars, sets defaults, and opens the SQLite DB.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
 Dates Revised: 2026-02-15
@@ -11,29 +11,29 @@ Revision History:
 - 2026-02-13, Barrett Brown: Expanded file to include modbus address offset
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
 Preconditions:
-- Environment variables and configured filesystem paths are readable.
-- Process has permission to create database directory/file when absent.
+- Env vars can be read.
+- App can read/create the DB path.
 Acceptable Input Values/Types:
-- String environment variables for paths/addresses/secrets.
-- Duration strings parseable by Go time.ParseDuration.
-- MODBUS_MW_BASE integer in range [0, 65535].
+- String env vars for paths and addresses.
+- Duration string for MODBUS_POLL_INTERVAL.
+- MODBUS_MW_BASE number from 0 to 65535.
 Unacceptable Input Values/Types:
-- Non-parseable duration strings.
-- Register base outside [0, 65535] or non-numeric input.
-- Unwritable database path or unreadable migration/validation paths.
+- Bad duration string.
+- MODBUS_MW_BASE out of range or not a number.
+- DB/migration/validation paths that do not exist or cannot be read.
 Postconditions:
-- Returns initialized Config with open DB handle and query helper, or an error.
+- Returns a filled Config with an open DB, or returns an error.
 Return Values/Types:
 - Load: (*Config, error)
-- Helper functions return parsed values and/or error.
+- Helper functions return parsed values or errors.
 Error/Exception Conditions:
-- File creation/stat failures, DB open/ping failures, and environment parse errors.
+- File create/read errors, DB open/ping errors, or parse errors.
 Side Effects:
-- Creates SQLite directories/files as needed and opens a live DB connection.
+- May create folders/files for SQLite and opens a DB connection.
 Invariants:
-- Successful Load always returns non-nil DB and Queries in Config.
+- If Load succeeds, DB and Queries are always set.
 Known Faults:
-- Config field naming/style is not fully uniform (e.g., ValidationFilePath local variable capitalization).
+- Naming style is not fully consistent in a few places.
 */
 
 import (
@@ -67,11 +67,13 @@ type Config struct {
 // input: None (reads environment variables with fallback defaults).
 // output: Returns a fully initialized Config or an error.
 func Load() (*Config, error) {
+	// Load in enviroment variables and if not present give it a fallback value
 	sqlitePath := getEnv("SQLITE_PATH", "./data/app.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
 	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
 	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
 
+	// Make sure the env you loaded for sqlite is real and can connect properly
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
 		return nil, fmt.Errorf("Error ensuring sqlite db file: %w", err)
 	}
@@ -86,18 +88,21 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("Error pinging sqlite db: %w", err)
 	}
 
+	// Make sure a poll interval exists if not give it a fallback and parse the duration of it
 	modbusPollInterval, err := getDurationEnv("MODBUS_POLL_INTERVAL", 5*time.Millisecond)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
+	// Get the offset value and ensure it is proper
 	modbusMWBase, err := getUint16Env("MODBUS_MW_BASE", 1024)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
+	// Return a config item
 	return &Config{
 		DB:                 db,
 		Queries:            database.New(db),
@@ -156,6 +161,7 @@ func getUint16Env(key string, fallback uint16) (uint16, error) {
 // input: dbPath (target SQLite file path).
 // output: Returns nil when file is present/created, or an error on filesystem failures.
 func ensureSQLiteFile(dbPath string) error {
+	// Load in the directory and make it if it doesn't exist
 	dir := filepath.Dir(dbPath)
 	if dir != "" {
 		// rwx rx rx
@@ -164,12 +170,14 @@ func ensureSQLiteFile(dbPath string) error {
 		}
 	}
 
+	// Double check file exists
 	if _, err := os.Stat(dbPath); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("Stat Error %s: %w", dbPath, err)
 	}
 
+	// Open the file if it exists
 	f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("Error creating SQLite file %s: %w", dbPath, err)

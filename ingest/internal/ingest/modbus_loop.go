@@ -2,7 +2,7 @@ package ingest
 
 /*
 Name: ingest/internal/ingest/modbus_loop.go
-Description: Implements the polling loop that reads Modbus registers, normalizes/validates samples, and sends events into fan-out sinks.
+Description: Main Modbus polling loop. Reads registers, builds a sample, validates it, then sends it to fanout sinks.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
 Dates Revised: 2026-02-15
@@ -11,32 +11,32 @@ Revision History:
 - 2026-02-13: Barrett Brown: Expanded / Made more in line with PLC structured data
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
 Preconditions:
-- Reachable Modbus TCP endpoint and valid validation rule file.
-- Poll interval and register base are configured.
+- Modbus TCP endpoint is reachable.
+- Validation rules file exists and config is set.
 Acceptable Input Values/Types:
-- Modbus responses as []byte of expected length (12 bytes for current mapping).
-- Supported sensor code values recognized by sensorTypeFromCode.
-- Context values that may be canceled for shutdown.
+- Modbus response bytes with expected length (12 bytes for current mapping).
+- Supported sensor type codes.
+- Context that can be canceled to stop the loop.
 Unacceptable Input Values/Types:
 - Incorrect register payload size or unsupported sensor type codes.
-- Invalid validation specification/path at startup.
+- Bad validation file/path at startup.
 Postconditions:
-- On each successful tick, one validated event is dispatched to fan-out channels.
+- Each successful tick sends one validated sample event to fanout.
 - Loop terminates when context is canceled.
 Return Values/Types:
 - NewModbusLoop: *ModbusLoop
-- Run/handleTick/dataNormalizer: error (nil on success)
+- Run/handleTick/dataNormalizer: error (nil = success)
 - sensorTypeFromCode: (string, error)
 Error/Exception Conditions:
-- Modbus read errors, normalization errors, validation failures, and JSON encode errors.
-- Startup failures for Modbus connect/rule load terminate process via log.Fatalf.
+- Modbus read/parse/validation/JSON errors.
+- Startup failures in connect/rule load stop the process with log.Fatalf.
 Side Effects:
-- Network I/O to Modbus endpoint, logs emitted, mutable sample buffer updated, events enqueued.
+- Reads from Modbus over network, updates sample state, enqueues events, writes logs.
 Invariants:
 - dataNormalizer expects exactly 12 bytes for current 6-register mapping.
-- Sample timestamp is always written in UTC string format per tick.
+- Sample timestamp is always written in UTC each tick.
 Known Faults:
-- Startup uses fatal exits instead of retry/backoff strategies.
+- Uses fatal exits at startup instead of retry logic.
 */
 
 import (
@@ -73,6 +73,7 @@ type ModbusLoop struct {
 // input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
 // output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
 func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string) *ModbusLoop {
+	// Setup the modbus handler & start the client listening to it
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
 	handler.SlaveId = 1
@@ -84,11 +85,14 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
+
+	// Create the rule engine based on the validation file
 	validator, err := NewRuleEngine(ValidationFilePath)
 	if err != nil {
 		log.Fatalf("Validation spec load failed (%s): %v", ValidationFilePath, err)
 	}
 
+	// Create the ModbusLoop struct fill out and return it for use with future validation and reading
 	loop := &ModbusLoop{
 		client:    client,
 		queries:   queries,
@@ -108,8 +112,10 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 // input: ctx (cancellation context controlling loop lifetime).
 // output: Returns context cancellation error on shutdown, otherwise runtime errors are logged per tick.
 func (m *ModbusLoop) Run(ctx context.Context) error {
+	// Start fanout workers to listen and consume jobs
 	m.startFanoutWorkers(ctx)
 
+	// Tick on interval for reading
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
@@ -130,15 +136,20 @@ func (m *ModbusLoop) Run(ctx context.Context) error {
 // input: ctx (used to abort processing when canceled).
 // output: Returns error for Modbus/read/validation/encoding failures, nil on successful dispatch.
 func (m *ModbusLoop) handleTick(ctx context.Context) error {
+	// Context check for graceful shutdown
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
+
+	// Read the holding register and store values
 	results, err := m.client.ReadHoldingRegisters(m.mwBase, 6)
 	if err != nil {
 		return err
 	}
+
+	// Normalize data to a generic form then validate that form against our rule file
 	if err := m.dataNormalizer(results); err != nil {
 		return err
 	}
@@ -148,6 +159,7 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	}
 	m.sample.Anomalies = validation.Anomalies
 
+	// Reset whatever sits in the buffer and then write the encoding of the sample to the encoder
 	m.jsonBuf.Reset()
 	if err := m.jsonEncoder.Encode(&m.sample); err != nil {
 		return fmt.Errorf("Encode sample json: %w", err)
@@ -170,6 +182,7 @@ func (m *ModbusLoop) dataNormalizer(results []byte) error {
 		return fmt.Errorf("Invalid size: got %d bytes", len(results))
 	}
 
+	// Parse and then validate sensor type
 	sensorCode := binary.BigEndian.Uint16(results[2:4])
 	sensorType, err := sensorTypeFromCode(sensorCode)
 	if err != nil {
@@ -177,6 +190,7 @@ func (m *ModbusLoop) dataNormalizer(results []byte) error {
 	}
 
 	// Later change to better fit the actual dataset properly this is mainly filler till we swap to simulink to get data flowing
+	// Fill out sample data with the values read in
 	m.sample.ID = binary.BigEndian.Uint16(results[0:2])
 	m.sample.Timestamp = nowUTC()
 	m.sample.SensorType = sensorType
@@ -192,6 +206,7 @@ func (m *ModbusLoop) dataNormalizer(results []byte) error {
 // input: code (raw sensor type numeric code from Modbus data).
 // output: Returns mapped sensor type string or an error for unsupported codes.
 func sensorTypeFromCode(code uint16) (string, error) {
+	// As register values are ints we just swap on that to get the name of the system
 	switch code {
 	case 1:
 		return "temperature_control_system", nil

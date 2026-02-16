@@ -2,7 +2,7 @@ package ingest
 
 /*
 Name: ingest/internal/ingest/TempSample.go
-Description: Defines the normalized ingest sample schema and timestamp helper used across the ingest pipeline.
+Description: Defines the sample data shape used by ingest and a helper to get UTC time.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
 Dates Revised: 2026-02-15
@@ -12,23 +12,23 @@ Revision History:
 Preconditions:
 - System clock is available for timestamp generation.
 Acceptable Input Values/Types:
-- TempSample fields accept native Go scalar types as defined in the struct.
-- Anomalies accepts []string labels.
+- TempSample field types exactly as declared in the struct.
+- Anomalies as a []string list.
 Unacceptable Input Values/Types:
-- Out-of-band semantic values (for example invalid sensor domain values) are not prevented by struct typing alone.
+- Wrong semantic values are still possible even if types are correct.
 Postconditions:
 - TempSample instances represent one normalized sensor sample.
 - nowUTC returns current UTC timestamp string.
 Return Values/Types:
-- nowUTC: string (RFC3339Nano UTC timestamp).
+- nowUTC: string timestamp in RFC3339Nano format.
 Error/Exception Conditions:
 - No explicit error return paths in this file.
 Side Effects:
 - Reads current system time when nowUTC is called.
 Invariants:
-- TempSample field types and JSON tags remain stable for serialization contracts.
+- TempSample JSON field names stay consistent.
 Known Faults:
-- Struct-level constraints (such as valid ranges) are enforced externally, not in this file.
+- Value validation (like min/max ranges) is handled outside this file.
 */
 
 import "time"
