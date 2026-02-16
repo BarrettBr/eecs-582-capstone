@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import About from "../components/About.vue";
+import Dashboard from "../components/Dashboard.vue";
 </script>
 
 <template>
 	<main>
-		<About />
+		<Dashboard />
 	</main>
 </template>
+
