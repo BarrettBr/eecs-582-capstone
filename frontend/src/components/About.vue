@@ -1,3 +1,17 @@
+<!-- Name: About.vue
+Description: The component for the about page
+Programmers: Adam Berry 
+Creation Date: 2/14
+Revision Dates: Adam Berry 2/14, Adam Berry 2/15
+Preconditions: Not Relevant
+Postconditions: Not Relevant
+Error Types: Not Relevant
+Invariants: Dependencies described in /Docs/web.md
+Known Faults: None
+-->
+
+
+
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import Card from "primevue/card";
