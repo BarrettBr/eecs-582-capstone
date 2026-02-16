@@ -2,7 +2,7 @@ package main
 
 /*
 Name: ingest/main.go
-Description: Entrypoint for the ingest service; loads configuration, applies migrations, and runs the Modbus ingest loop until shutdown.
+Description: Starts the ingest app, loads config, runs DB migrations, and keeps the Modbus loop running.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
 Dates Revised: 2026-02-15
@@ -11,27 +11,27 @@ Revision History:
 - 2026-02-05, Barrett Brown: Added migrations and sqlc framework
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
 Preconditions:
-- Runtime environment can provide required configuration values and filesystem access.
-- SQLite driver and migration files are available.
+- Env vars are available (or defaults can be used).
+- DB file path and migration files can be accessed.
 Acceptable Input Values/Types:
-- Environment variables (string values) for config keys; missing values use documented defaults.
-- OS interrupt/termination signals for graceful shutdown.
+- String env var values for config.
+- Normal shutdown signals like Ctrl+C/SIGTERM.
 Unacceptable Input Values/Types:
-- Invalid config values (for example malformed duration or invalid register base) causing startup failure.
-- Missing or unreadable migration path/database path.
+- Bad config values (like invalid duration or register number).
+- Missing DB/migration paths.
 Postconditions:
-- Service either runs ingest loop successfully or exits with a fatal startup/runtime error.
+- Service runs and polls Modbus, or exits with an error.
 Return Values/Types:
 - main: no return value.
-- runMigrations: error (nil on success; non-nil on dialect/migration failures).
+- runMigrations: error (nil = success, non-nil = failure).
 Error/Exception Conditions:
-- Config load failures, DB open/ping failures, migration failures, or ingest loop fatal errors.
+- Config, DB, migration, or ingest startup/runtime failures.
 Side Effects:
-- Opens database connection, executes schema migrations, starts network polling loop, writes logs.
+- Opens DB, runs migrations, starts polling loop, writes logs.
 Invariants:
-- Ingest loop only starts after successful configuration and migration setup.
+- Ingest loop only starts after config and migrations succeed.
 Known Faults:
-- Fatal logging exits process immediately instead of attempting recovery.
+- Uses fatal exits instead of trying to recover.
 */
 
 import (
@@ -64,6 +64,7 @@ func main() {
 	}
 	defer appCfg.DB.Close()
 
+	// Run database migrations
 	if err := runMigrations(appCfg.DB, appCfg.MigrationsPath); err != nil {
 		log.Fatalf("Error running migrations: %v", err)
 	}

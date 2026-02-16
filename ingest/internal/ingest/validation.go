@@ -2,7 +2,7 @@ package ingest
 
 /*
 Name: ingest/internal/ingest/validation.go
-Description: Loads declarative validation rules and evaluates incoming samples for required fields, bounds, and anomaly labels.
+Description: Loads validation rules from JSON and checks each sample for required fields, bounds, and anomalies.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
 Dates Revised: 2026-02-15
@@ -10,31 +10,31 @@ Revision History:
 - 2026-02-13, Barrett Brown: Created file and started structing out
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
 Preconditions:
-- Validation rule JSON exists and is syntactically correct for expected schema.
-- Samples are struct or pointer-to-struct values for reflection-based extraction.
+- Validation JSON file exists and matches expected format.
+- Input sample is a struct (or pointer to struct).
 Acceptable Input Values/Types:
-- JSON rules with required_fields ([]string), bounds (field->min/max), and anomaly_rules.
-- Sample values containing numeric types supported by asFloat64.
+- Rule JSON with required_fields, bounds, and anomaly_rules.
+- Sample fields with numeric types that can be converted to float64.
 Unacceptable Input Values/Types:
 - Non-struct sample values for Validate.
 - Unsupported comparison operators in anomaly rules.
 - Non-numeric values for fields expected to be numeric.
 Postconditions:
-- Validate returns deterministic ValidationResult for the given rules and sample snapshot.
+- Validate returns a ValidationResult for the sample using the loaded rules.
 Return Values/Types:
 - NewRuleEngine: (*RuleEngine, error)
 - Validate: ValidationResult
-- Helper functions return typed parse/compare outputs and error indicators.
+- Helper functions return parsed/comparison values and error info.
 Error/Exception Conditions:
 - Rule file read/unmarshal failures.
-- Operator/type mismatch conditions reported through ValidationResult errors.
+- Bad operators or bad field types are reported in ValidationResult errors.
 Side Effects:
-- Reads rules from disk in NewRuleEngine; otherwise pure in-memory processing.
+- NewRuleEngine reads a file from disk; validation itself is in-memory.
 Invariants:
 - RuleEngine.spec remains unchanged during validation execution.
 - Missing numeric fields are treated as absent unless marked required.
 Known Faults:
-- Reflection-based mapping can incur overhead and may miss complex nested semantics.
+- Reflection adds overhead and may not cover complex nested structs perfectly.
 */
 
 import (
@@ -92,11 +92,13 @@ type RuleEngine struct {
 // input: specPath (path to validation JSON rules).
 // output: Returns initialized RuleEngine or an error on read/parse failures.
 func NewRuleEngine(specPath string) (*RuleEngine, error) {
+	// Read in the file
 	content, err := os.ReadFile(specPath)
 	if err != nil {
 		return nil, fmt.Errorf("Read validation spec %s: %w", specPath, err)
 	}
 
+	// Unmarshal the files data into the spec for it
 	var spec ValidationSpec
 	if err := json.Unmarshal(content, &spec); err != nil {
 		return nil, fmt.Errorf("Parse validation spec %s: %w", specPath, err)
@@ -112,6 +114,7 @@ func NewRuleEngine(specPath string) (*RuleEngine, error) {
 // input: sample (struct or pointer-to-struct containing json-tagged fields).
 // output: Returns ValidationResult with validity status, errors, and anomaly labels.
 func (e *RuleEngine) Validate(sample any) ValidationResult {
+	// Convert the struct to a record format and then validate it
 	record, ok := structToRecord(sample)
 	if !ok {
 		return ValidationResult{
@@ -174,6 +177,7 @@ func (e *RuleEngine) Validate(sample any) ValidationResult {
 		}
 	}
 
+	// If any errors exist this isnt a valid record anymore
 	if len(result.Errors) > 0 {
 		result.Valid = false
 	}
@@ -224,6 +228,7 @@ func structToRecord(sample any) (map[string]any, bool) {
 // input: left operand, op token (>, >=, <, <=, ==, !=), right operand.
 // output: Returns comparison result or error for unsupported operators.
 func compareFloat(left float64, op string, right float64) (bool, error) {
+	// Basic switch statement to take the rule operator in the file and do the operation
 	switch op {
 	case ">":
 		return left > right, nil
@@ -281,6 +286,7 @@ func asFloat64(value any) (float64, bool) {
 // input: value (any field value).
 // output: Returns true for nil or empty/whitespace strings, false otherwise.
 func isMissingValue(value any) bool {
+	// Check if a value is missing or if it is just whitespace
 	if value == nil {
 		return true
 	}
@@ -295,11 +301,13 @@ func isMissingValue(value any) bool {
 // input: record map and field key.
 // output: Returns number, found flag, and error message; missing fields return found=false with empty error.
 func getFloatNumber(record map[string]any, field string) (float64, bool, string) {
+	// Get a value from the record and validate it is non-missing
 	value, exists := record[field]
 	if !exists || isMissingValue(value) {
 		return 0, false, ""
 	}
 
+	// Ensure the value is a float64 value
 	num, ok := asFloat64(value)
 	if !ok {
 		return 0, false, fmt.Sprintf("Field %s is not numeric", field)
