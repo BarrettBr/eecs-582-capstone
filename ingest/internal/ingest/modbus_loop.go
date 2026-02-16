@@ -1,5 +1,44 @@
 package ingest
 
+/*
+Name: ingest/internal/ingest/modbus_loop.go
+Description: Implements the polling loop that reads Modbus registers, normalizes/validates samples, and sends events into fan-out sinks.
+Programmer: Barrett Brown
+Date Created: 2026-02-01
+Dates Revised: 2026-02-15
+Revision History:
+- 2026-02-01: Barrett Brown: Created base file structure
+- 2026-02-13: Barrett Brown: Expanded / Made more in line with PLC structured data
+- 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+Preconditions:
+- Reachable Modbus TCP endpoint and valid validation rule file.
+- Poll interval and register base are configured.
+Acceptable Input Values/Types:
+- Modbus responses as []byte of expected length (12 bytes for current mapping).
+- Supported sensor code values recognized by sensorTypeFromCode.
+- Context values that may be canceled for shutdown.
+Unacceptable Input Values/Types:
+- Incorrect register payload size or unsupported sensor type codes.
+- Invalid validation specification/path at startup.
+Postconditions:
+- On each successful tick, one validated event is dispatched to fan-out channels.
+- Loop terminates when context is canceled.
+Return Values/Types:
+- NewModbusLoop: *ModbusLoop
+- Run/handleTick/dataNormalizer: error (nil on success)
+- sensorTypeFromCode: (string, error)
+Error/Exception Conditions:
+- Modbus read errors, normalization errors, validation failures, and JSON encode errors.
+- Startup failures for Modbus connect/rule load terminate process via log.Fatalf.
+Side Effects:
+- Network I/O to Modbus endpoint, logs emitted, mutable sample buffer updated, events enqueued.
+Invariants:
+- dataNormalizer expects exactly 12 bytes for current 6-register mapping.
+- Sample timestamp is always written in UTC string format per tick.
+Known Faults:
+- Startup uses fatal exits instead of retry/backoff strategies.
+*/
+
 import (
 	"bytes"
 	"context"
@@ -13,6 +52,9 @@ import (
 	"github.com/goburrow/modbus"
 )
 
+// description: Polling loop that reads Modbus registers, validates samples, and dispatches them to sinks.
+// input: Constructed with database queries, poll settings, Modbus settings, and validation rules.
+// output: Produces validated TempSample events routed through the fan-out pipeline.
 type ModbusLoop struct {
 	client      modbus.Client
 	queries     *database.Queries
@@ -27,6 +69,9 @@ type ModbusLoop struct {
 	wsCh        chan fanoutEvent
 }
 
+// description: Creates and initializes a ModbusLoop with Modbus client, validation engine, and fan-out channels.
+// input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
+// output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
 func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string) *ModbusLoop {
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
@@ -59,6 +104,9 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 	return loop
 }
 
+// description: Starts sink workers and continuously executes ingest ticks until context cancellation.
+// input: ctx (cancellation context controlling loop lifetime).
+// output: Returns context cancellation error on shutdown, otherwise runtime errors are logged per tick.
 func (m *ModbusLoop) Run(ctx context.Context) error {
 	m.startFanoutWorkers(ctx)
 
@@ -78,6 +126,9 @@ func (m *ModbusLoop) Run(ctx context.Context) error {
 	}
 }
 
+// description: Executes one ingest cycle: read Modbus registers, normalize, validate, encode, and fan-out.
+// input: ctx (used to abort processing when canceled).
+// output: Returns error for Modbus/read/validation/encoding failures, nil on successful dispatch.
 func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -110,6 +161,9 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	return nil
 }
 
+// description: Converts raw Modbus register bytes into the normalized TempSample fields.
+// input: results (12-byte register payload from Modbus read).
+// output: Updates m.sample in place and returns nil, or returns error on invalid payload/type.
 func (m *ModbusLoop) dataNormalizer(results []byte) error {
 	// 2 bytes per register * 6 registers = 12 bytes.
 	if len(results) != 12 {
@@ -134,6 +188,9 @@ func (m *ModbusLoop) dataNormalizer(results []byte) error {
 	return nil
 }
 
+// description: Maps numeric sensor type codes to human-readable sensor type names.
+// input: code (raw sensor type numeric code from Modbus data).
+// output: Returns mapped sensor type string or an error for unsupported codes.
 func sensorTypeFromCode(code uint16) (string, error) {
 	switch code {
 	case 1:
