@@ -1,3 +1,17 @@
+<!-- Name: Donut Graph
+Description: Used to create a donut graph from graphs.js, code largely from primevue documentation
+Programmers: Adam Berry 
+Creation Date: 2/15
+Revision Dates: Adam Berry 2/15
+Preconditions: Not Relevant
+Postconditions: Not Relevant
+Error Types: Not Relevant
+Invariants: Dependencies described in /Docs/web.md
+Known Faults: None
+-->
+
+
+
 <script setup>
 import { ref, onMounted } from "vue";
 import Chart from 'primevue/chart';
