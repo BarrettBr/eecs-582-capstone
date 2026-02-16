@@ -1,17 +1,33 @@
+'''
+Artifact: ML Anomaly Detection Test
+Description: Runs four different ML anomaly detection models for testing purposes
+Author: Jacob Kice
+Date Created: 02/13/2026
+Date Revised: Not Applicable
+Preconditions: Input file is located in pre-defined location, of type json, with appropriate internat format
+Postconditions: Not Applicable
+Possible errors: FileNotFoundError: Designated file cannot be found at defined filepath
+Side effects: Displays 4 scatter plots with results of anomaly detection models
+Invariants: Not Applicable
+Known faults: None
+'''
+
+# Import modules
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
+import numpy as np
 
-data = pd.read_json("../MOCK_DATA_10K.json")
+data = pd.read_json("../MOCK_DATA_10K.json")    # Load Data
 
-trimmed = data.loc[:, ['fan_on', 'temperature', 'heater_power']]
+trimmed = data.loc[:, ['fan_on', 'temperature', 'heater_power']]    # Trim data set to important attributes
 
-iso_forest = IsolationForest()
-iso_forest.fit(trimmed)
-
+#   Isolation forest anomaly detection
+iso_forest = IsolationForest()  # Initialize Isolation Forest object
+iso_forest.fit(trimmed) # Fit the iso forest to the trimmed data set
 
 # Get anomaly scores
 scores = iso_forest.score_samples(trimmed)
@@ -20,28 +36,25 @@ scores = iso_forest.score_samples(trimmed)
 predictions = iso_forest.predict(trimmed)
 
 
-# Add scores and predictions to DataFrame
-
 # DBSCAN anomaly detection
-dbscan = DBSCAN(eps=0.5, min_samples=5)
-dbscan_labels = dbscan.fit_predict(trimmed)
+dbscan = DBSCAN(eps=0.5, min_samples=5) # Initialize DBSCAN object
+dbscan_labels = dbscan.fit_predict(trimmed) # Fit dbscan to trimmed data set
 # In DBSCAN, label -1 means outlier, others are cluster labels
 dbscan_outlier = (dbscan_labels == -1).astype(int)  # 1 for outlier, 0 for inlier
 
-# Local Outlier Factor (LOF)
-lof = LocalOutlierFactor(n_neighbors=20, contamination='auto')
-lof_labels = lof.fit_predict(trimmed)
+# Local Outlier Factor (LOF) anomaly detection
+lof = LocalOutlierFactor(n_neighbors=20, contamination='auto')  # Initialize LOF object
+lof_labels = lof.fit_predict(trimmed)   # Fit lof to trimmed data set
 # In LOF, label -1 means outlier, 1 means inlier
 lof_outlier = (lof_labels == -1).astype(int)  # 1 for outlier, 0 for inlier
 
 # K-Means anomaly detection
 # We'll use distance to nearest cluster center as anomaly score
-kmeans = KMeans(n_clusters=3, random_state=42)
-kmeans.fit(trimmed)
-distances = kmeans.transform(trimmed).min(axis=1)
+kmeans = KMeans(n_clusters=3, random_state=42)  # Initialize KMeans object
+kmeans.fit(trimmed) # Fit kmeans to trimmed data set
+distances = kmeans.transform(trimmed).min(axis=1)   # Get kmeans distances
 # Mark as outlier if distance is in the top 5% (tunable)
-import numpy as np
-threshold = np.percentile(distances, 95)
+threshold = np.percentile(distances, 95)    # Set threshold for outlier distance
 kmeans_outlier = (distances > threshold).astype(int)  # 1 for outlier, 0 for inlier
 
 # Add scores and predictions to DataFrame
@@ -56,7 +69,7 @@ scored_data = data.assign(
 
 
 
-
+# Anomaly score outputs
 print(scored_data)
 print("\nIsolation Forest outlier: -1 (anomaly), 1 (normal)")
 print("DBSCAN outlier: 1 (anomaly), 0 (normal)")
