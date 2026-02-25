@@ -52,15 +52,20 @@ import (
 // input: Populated by Load using environment variables and defaults.
 // output: Used by main to initialize DB, Modbus polling, and validation settings.
 type Config struct {
-	DB                 *sql.DB
-	Queries            *database.Queries
-	Secret             string
-	SQLitePath         string
-	MigrationsPath     string
-	ModbusPollInterval time.Duration
-	ModbusAddress      string
-	ModbusMWBase       uint16 // uint since modbus usually expects these
-	ValidationFilePath string
+	DB                   *sql.DB
+	Queries              *database.Queries
+	Secret               string
+	SQLitePath           string
+	MigrationsPath       string
+	ModbusPollInterval   time.Duration
+	ModbusAddress        string
+	ModbusMWBase         uint16 // uint since modbus usually expects these
+	ValidationFilePath   string
+	MLAPIURL             string
+	MLHTTPTimeout        time.Duration
+	MLBatchSize          int
+	MLBatchFlushInterval time.Duration
+	MLDropOnOverload     bool
 }
 
 // description: Builds and validates service configuration, opens SQLite, and initializes query helpers.
@@ -72,6 +77,7 @@ func Load() (*Config, error) {
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
 	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
 	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
+	mlAPIURL := getEnv("ML_API_URL", "")
 
 	// Make sure the env you loaded for sqlite is real and can connect properly
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
@@ -102,17 +108,50 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	mlHTTPTimeout, err := getDurationEnv("ML_HTTP_TIMEOUT", 500*time.Millisecond)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	mlBatchFlushInterval, err := getDurationEnv("ML_BATCH_FLUSH_INTERVAL", 25*time.Millisecond)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	mlBatchSize, err := getIntEnv("ML_BATCH_SIZE", 32)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if mlBatchSize <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("ML_BATCH_SIZE must be > 0")
+	}
+
+	mlDropOnOverload, err := getBoolEnv("ML_DROP_ON_OVERLOAD", true)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	// Return a config item
 	return &Config{
-		DB:                 db,
-		Queries:            database.New(db),
-		Secret:             os.Getenv("SECRET"),
-		SQLitePath:         sqlitePath,
-		MigrationsPath:     migrationsPath,
-		ModbusPollInterval: modbusPollInterval,
-		ModbusAddress:      modbusAddress,
-		ModbusMWBase:       modbusMWBase,
-		ValidationFilePath: ValidationFilePath,
+		DB:                   db,
+		Queries:              database.New(db),
+		Secret:               os.Getenv("SECRET"),
+		SQLitePath:           sqlitePath,
+		MigrationsPath:       migrationsPath,
+		ModbusPollInterval:   modbusPollInterval,
+		ModbusAddress:        modbusAddress,
+		ModbusMWBase:         modbusMWBase,
+		ValidationFilePath:   ValidationFilePath,
+		MLAPIURL:             mlAPIURL,
+		MLHTTPTimeout:        mlHTTPTimeout,
+		MLBatchSize:          mlBatchSize,
+		MLBatchFlushInterval: mlBatchFlushInterval,
+		MLDropOnOverload:     mlDropOnOverload,
 	}, nil
 }
 
@@ -153,6 +192,34 @@ func getUint16Env(key string, fallback uint16) (uint16, error) {
 			return 0, fmt.Errorf("%s must be between 0 and 65535", key)
 		}
 		return uint16(n), nil
+	}
+	return fallback, nil
+}
+
+// description: Reads a positive/negative int environment variable with fallback.
+// input: key (env var name), fallback (value used when unset).
+// output: Returns parsed int or fallback; returns error on parse failure.
+func getIntEnv(key string, fallback int) (int, error) {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("Parse %s Error: %w", key, err)
+		}
+		return n, nil
+	}
+	return fallback, nil
+}
+
+// description: Reads a boolean environment variable with fallback.
+// input: key (env var name), fallback (value used when unset).
+// output: Returns parsed bool or fallback; returns error on invalid values.
+func getBoolEnv(key string, fallback bool) (bool, error) {
+	if v := os.Getenv(key); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return false, fmt.Errorf("Parse %s Error: %w", key, err)
+		}
+		return b, nil
 	}
 	return fallback, nil
 }

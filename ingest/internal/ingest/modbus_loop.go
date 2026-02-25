@@ -46,6 +46,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
@@ -56,23 +57,40 @@ import (
 // input: Constructed with database queries, poll settings, Modbus settings, and validation rules.
 // output: Produces validated TempSample events routed through the fan-out pipeline.
 type ModbusLoop struct {
-	client      modbus.Client
-	queries     *database.Queries
-	interval    time.Duration
-	mwBase      uint16
-	validator   *RuleEngine
-	sample      TempSample
-	jsonBuf     bytes.Buffer  // Writer that stores bytes for logging
-	jsonEncoder *json.Encoder // Converts struct -> Json
-	mlCh        chan fanoutEvent
-	sqlCh       chan fanoutEvent
-	wsCh        chan fanoutEvent
+	client               modbus.Client
+	queries              *database.Queries
+	interval             time.Duration
+	mwBase               uint16
+	validator            *RuleEngine
+	sample               TempSample
+	jsonBuf              bytes.Buffer  // Writer that stores bytes for logging
+	jsonEncoder          *json.Encoder // Converts struct -> Json
+	mlCh                 chan fanoutEvent
+	sqlCh                chan fanoutEvent
+	wsCh                 chan fanoutEvent
+	mlAPIURL             string
+	mlHTTP               *http.Client
+	mlBatchSize          int
+	mlBatchFlushInterval time.Duration
+	mlDropOnOverload     bool
+	mlLastResponse       []byte
+}
+
+// description: ML fanout runtime settings for batching, transport, and overload behavior.
+// input: Provided by config at startup with env-derived values.
+// output: Consumed by NewModbusLoop to initialize ML delivery behavior.
+type MLFanoutConfig struct {
+	APIURL             string
+	HTTPTimeout        time.Duration
+	BatchSize          int
+	BatchFlushInterval time.Duration
+	DropOnOverload     bool
 }
 
 // description: Creates and initializes a ModbusLoop with Modbus client, validation engine, and fan-out channels.
 // input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
 // output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
-func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string) *ModbusLoop {
+func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig) *ModbusLoop {
 	// Setup the modbus handler & start the client listening to it
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
@@ -102,6 +120,19 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 		mlCh:      make(chan fanoutEvent, 128),
 		sqlCh:     make(chan fanoutEvent, 128),
 		wsCh:      make(chan fanoutEvent, 128),
+		mlAPIURL:  mlCfg.APIURL,
+		mlHTTP: &http.Client{
+			Timeout: mlCfg.HTTPTimeout,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 100,
+				MaxConnsPerHost:     0,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+		mlBatchSize:          mlCfg.BatchSize,
+		mlBatchFlushInterval: mlCfg.BatchFlushInterval,
+		mlDropOnOverload:     mlCfg.DropOnOverload,
 	}
 	loop.jsonEncoder = json.NewEncoder(&loop.jsonBuf)
 	loop.jsonEncoder.SetEscapeHTML(false) // Shouldn't matter atm due to us sending int / uints back but a later protection
@@ -169,7 +200,7 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	sample := m.sample
 	sample.Anomalies = append([]string(nil), m.sample.Anomalies...)
 	payload := append([]byte(nil), m.jsonBuf.Bytes()...)
-	m.fanOut(fanoutEvent{sample: sample, payload: payload})
+	m.fanOut(ctx, fanoutEvent{sample: sample, payload: payload})
 	return nil
 }
 
