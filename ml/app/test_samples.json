@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2026-02-24T12:00:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": true,
+    "temperature": 22.5,
+    "heater_power": 0.0,
+    "anomalies": []
+  },
+  {
+    "id": 2,
+    "timestamp": "2026-02-24T12:01:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 102,
+    "fan_on": false,
+    "temperature": 25.1,
+    "heater_power": 1.2,
+    "anomalies": []
+  },
+  {
+    "id": 3,
+    "timestamp": "2026-02-24T12:02:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 21.8,
+    "heater_power": 0.5,
+    "anomalies": []
+  },
+  {
+    "id": 4,
+    "timestamp": "2026-02-24T12:03:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 104,
+    "fan_on": false,
+    "temperature": 30.0,
+    "heater_power": 2.0,
+    "anomalies": ["overheat"]
+  },
+  {
+    "id": 5,
+    "timestamp": "2026-02-24T12:05:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": false,
+    "temperature": 23.0,
+    "heater_power": 0.8,
+    "anomalies": []
+  },
+  {
+    "id": 6,
+    "timestamp": "2026-02-24T12:06:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": true,
+    "temperature": 20.2,
+    "heater_power": 0.0,
+    "anomalies": []
+  },
+  {
+    "id": 7,
+    "timestamp": "2026-02-24T12:07:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": false,
+    "temperature": 27.5,
+    "heater_power": 1.5,
+    "anomalies": []
+  },
+  {
+    "id": 8,
+    "timestamp": "2026-02-24T12:08:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": true,
+    "temperature": 18.7,
+    "heater_power": 0.0,
+    "anomalies": []
+  },
+  {
+    "id": 9,
+    "timestamp": "2026-02-24T12:09:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": false,
+    "temperature": 29.2,
+    "heater_power": 1.8,
+    "anomalies": ["overheat"]
+  },
+  {
+    "id": 10,
+    "timestamp": "2026-02-24T12:10:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 21.0,
+    "heater_power": 0.2,
+    "anomalies": []
+  },
+  {
+    "id": 11,
+    "timestamp": "2026-02-24T12:11:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": false,
+    "temperature": 26.8,
+    "heater_power": 1.3,
+    "anomalies": []
+  },
+  {
+    "id": 12,
+    "timestamp": "2026-02-24T12:12:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 20.5,
+    "heater_power": 0.0,
+    "anomalies": []
+  },
+  {
+    "id": 13,
+    "timestamp": "2026-02-24T12:13:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 114,
+    "fan_on": false,
+    "temperature": 28.7,
+    "heater_power": 1.7,
+    "anomalies": ["overheat"]
+  },
+  {
+    "id": 14,
+    "timestamp": "2026-02-24T12:14:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": true,
+    "temperature": 19.5,
+    "heater_power": 0.0,
+    "anomalies": []
+  }
+]
