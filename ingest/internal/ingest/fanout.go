@@ -36,8 +36,15 @@ Known Faults:
 */
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
+	"time"
 )
 
 // description: Immutable event passed to each downstream sink worker.
@@ -48,12 +55,20 @@ type fanoutEvent struct {
 	payload []byte
 }
 
+type mlBatchRequest struct {
+	Samples []TempSample `json:"samples"`
+}
+
 // description: Starts one worker goroutine per sink channel.
 // input: ctx (shared cancellation context for all workers).
 // output: None; workers run asynchronously until ctx is canceled.
 func (m *ModbusLoop) startFanoutWorkers(ctx context.Context) {
 	// Start a goroutine for each consumer to allow each to consume tasks
-	go m.runSink(ctx, "ml", m.mlCh, m.deliverToML)
+	if m.mlAPIURL != "" {
+		go m.runMLSink(ctx)
+	} else {
+		log.Printf("Sink=ml disabled: ML_API_URL is empty")
+	}
 	go m.runSink(ctx, "sql", m.sqlCh, m.deliverToSQL)
 	go m.runSink(ctx, "websocket", m.wsCh, m.deliverToWebsocket)
 }
@@ -61,9 +76,9 @@ func (m *ModbusLoop) startFanoutWorkers(ctx context.Context) {
 // description: Dispatches one event to all configured sinks.
 // input: event (sample and payload snapshot to deliver).
 // output: None; each sink enqueue may accept or drop independently.
-func (m *ModbusLoop) fanOut(event fanoutEvent) {
+func (m *ModbusLoop) fanOut(ctx context.Context, event fanoutEvent) {
 	// Enque the event to each service to be consumed on it's own time
-	m.enqueue("ml", m.mlCh, event)
+	m.enqueueML(ctx, event)
 	m.enqueue("sql", m.sqlCh, event)
 	m.enqueue("websocket", m.wsCh, event)
 }
@@ -98,11 +113,116 @@ func (m *ModbusLoop) enqueue(name string, sink chan<- fanoutEvent, event fanoutE
 	}
 }
 
-// description: Placeholder ML sink handler for future inference/publishing logic.
-// input: context and fanout event.
-// output: Returns nil; no-op skeleton.
-func (m *ModbusLoop) deliverToML(_ context.Context, event fanoutEvent) error {
-	_ = event
+// description: Sends one event to the ML sink with either drop-on-full or backpressure behavior.
+// input: ctx (for canceling blocking sends) and event (fanout payload).
+// output: None; logs drops or canceled backpressure sends.
+func (m *ModbusLoop) enqueueML(ctx context.Context, event fanoutEvent) {
+	if m.mlAPIURL == "" {
+		return
+	}
+	if m.mlDropOnOverload {
+		m.enqueue("ml", m.mlCh, event)
+		return
+	}
+
+	select {
+	case <-ctx.Done():
+		log.Printf("Sink=ml canceled before enqueue sample id=%d", event.sample.ID)
+	case m.mlCh <- event:
+	}
+}
+
+// description: Drains ML events, batches them, and flushes to the ML API on size or interval.
+// input: ctx (cancellation context for worker lifecycle).
+// output: None; logs batch delivery errors and exits on cancellation.
+func (m *ModbusLoop) runMLSink(ctx context.Context) {
+	batch := make([]fanoutEvent, 0, m.mlBatchSize)
+	ticker := time.NewTicker(m.mlBatchFlushInterval)
+	defer ticker.Stop()
+
+	flush := func(flushCtx context.Context) {
+		if len(batch) == 0 {
+			return
+		}
+		if err := m.deliverMLBatch(flushCtx, batch); err != nil {
+			log.Printf("Sink=ml error: %v", err)
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			flush(context.Background())
+			return
+		case event := <-m.mlCh:
+			batch = append(batch, event)
+			if len(batch) >= m.mlBatchSize {
+				flush(ctx)
+			}
+		case <-ticker.C:
+			flush(ctx)
+		}
+	}
+}
+
+// description: Encodes and posts a batch to the ML API, then stores the last valid JSON response body.
+// input: ctx (request lifecycle) and batch (one or more fanout events).
+// output: Returns error on request, non-2xx status, or invalid JSON response.
+func (m *ModbusLoop) deliverMLBatch(ctx context.Context, batch []fanoutEvent) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	if m.mlAPIURL == "" {
+		return nil
+	}
+
+	// Append all samples for marshaling
+	samples := make([]TempSample, 0, len(batch))
+	for _, event := range batch {
+		samples = append(samples, event.sample)
+	}
+
+	body, err := json.Marshal(mlBatchRequest{Samples: samples})
+	if err != nil {
+		return fmt.Errorf("ML request encode: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.mlAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("ML request build: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := m.mlHTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("ML request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("ML response read: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := strings.TrimSpace(string(respBody))
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		return fmt.Errorf("ML response status=%d body=%q", resp.StatusCode, msg)
+	}
+
+	if trimmed := bytes.TrimSpace(respBody); len(trimmed) > 0 {
+		var parsed any
+		if err := json.Unmarshal(trimmed, &parsed); err != nil {
+			return fmt.Errorf("ML response json parse: %w", err)
+		}
+		m.mlLastResponse = append(m.mlLastResponse[:0], trimmed...)
+	} else {
+		m.mlLastResponse = m.mlLastResponse[:0]
+	}
+
 	return nil
 }
 

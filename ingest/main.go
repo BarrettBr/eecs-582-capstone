@@ -76,6 +76,13 @@ func main() {
 		appCfg.ModbusAddress,
 		appCfg.ModbusMWBase,
 		appCfg.ValidationFilePath,
+		ingest.MLFanoutConfig{
+			APIURL:             appCfg.MLAPIURL,
+			HTTPTimeout:        appCfg.MLHTTPTimeout,
+			BatchSize:          appCfg.MLBatchSize,
+			BatchFlushInterval: appCfg.MLBatchFlushInterval,
+			DropOnOverload:     appCfg.MLDropOnOverload,
+		},
 	)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
