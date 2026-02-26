@@ -9,12 +9,14 @@
 //Invariants: Dependencies described in /Docs/web.md
 //Known Faults: None
 
-import "./assets/main.css";
+import "./assets/main.scss";
 
 import { createApp } from "vue";
 import { createPinia } from "pinia";
+
 import PrimeVue from "primevue/config";
 import Aura from "@primeuix/themes/aura";
+import 'primeicons/primeicons.css'
 
 import App from "./App.vue";
 import router from "./router";
@@ -25,7 +27,10 @@ app.use(createPinia());
 app.use(router);
 app.use(PrimeVue, {
 	theme: {
-		preset: Aura
+		preset: Aura,
+		options: {
+			darkModeSelector: '.app-dark'
+		},
 	}
 });
 

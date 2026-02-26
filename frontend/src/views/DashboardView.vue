@@ -10,13 +10,11 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 
-<script setup lang="ts">
-import Dashboard from "../components/Dashboard.vue";
+<script setup lang = "ts">
+import Dashboard from "@/components/Dashboard.vue";
 </script>
 
 <template>
-	<main>
-		<Dashboard />
-	</main>
+    <div class="grid grid-cols-12 gap-8">
+    </div>
 </template>
-

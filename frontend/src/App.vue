@@ -10,63 +10,11 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 
-
-<script setup lang="ts">
-import { RouterLink, RouterView } from "vue-router";
-</script>
+<script setup></script>
 
 <template>
-	<div class="layout">
-		<header class="topbar">
-			<h2 class="title">Sentinel Monitoring System</h2>
-
-			<nav class="nav">
-				<RouterLink to="/">Home</RouterLink>
-				<RouterLink to="/dashboard">Dashboard</RouterLink>
-				<RouterLink to="/about">About</RouterLink>
-			</nav>
-		</header>
-
-		<main class="content">
-			<RouterView />
-		</main>
-	</div>
+    <router-view />
 </template>
 
-<style scoped>
-.layout {
-	display: flex;
-	flex-direction: column;
-	min-height: 100vh;
-}
+<style scoped></style>
 
-.topbar {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 1rem 2rem;
-	background: #1f2937;
-	color: white;
-}
-
-.title {
-	margin: 0;
-}
-
-.nav a {
-	margin-left: 1rem;
-	text-decoration: none;
-	color: white;
-}
-
-.nav a.router-link-active {
-	font-weight: bold;
-	border-bottom: 2px solid #42b983;
-}
-
-.content {
-	flex: 1;
-	padding: 2rem;
-	background: #f3f4f6;
-}
-</style>
