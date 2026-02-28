@@ -3,6 +3,7 @@ module github.com/BarrettBr/eecs-582-capstone
 go 1.25.6
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.26.0
 	modernc.org/sqlite v1.44.3

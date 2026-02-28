@@ -47,6 +47,7 @@ import (
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
 	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
+	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -70,6 +71,21 @@ func main() {
 		log.Fatalf("Error running migrations: %v", err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	wsServer := stream.NewServer(stream.Config{
+		Addr:               appCfg.WSAddress,
+		Path:               appCfg.WSPath,
+		BatchSize:          appCfg.WSBatchSize,
+		BatchFlushInterval: appCfg.WSBatchFlushInterval,
+	})
+	go func() {
+		if err := wsServer.Start(ctx); err != nil {
+			log.Printf("Websocket server error: %v", err)
+		}
+	}()
+
 	// Create context that is canceled upon ctrl + c so it cancels the modbus loop
 	modbusLoop := ingest.NewModbusLoop(
 		appCfg.DB,
@@ -90,11 +106,11 @@ func main() {
 			BatchFlushInterval: appCfg.SQLBatchFlushInterval,
 			NormalSampleRate:   appCfg.SQLNormalSampleRate,
 		},
+		wsServer,
 	)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	log.Printf("Modbus service ready. Poll interval: %s", appCfg.ModbusPollInterval)
+	log.Printf("Websocket stream ready at %s", wsServer.URL())
 	if err := modbusLoop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("Error running ingest loop: %v", err)
 	}
