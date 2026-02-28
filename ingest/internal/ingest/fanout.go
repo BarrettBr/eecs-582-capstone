@@ -5,9 +5,10 @@ Name: ingest/internal/ingest/fanout.go
 Description: Handles fanout so one sample can be sent to ML, SQL, and websocket workers.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
-Dates Revised: 2026-02-15
+Dates Revised: 2026-02-28
 Revision History:
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+- 2026-02-28, Barrett Brown:
 Preconditions:
 - ModbusLoop channels are initialized before worker start.
 - Event data should be copied before sharing across workers.
@@ -45,13 +46,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/BarrettBr/eecs-582-capstone/internal/database"
 )
 
 // description: Immutable event passed to each downstream sink worker.
 // input: sample (normalized struct), payload (JSON-encoded bytes for wire/storage use).
 // output: Consumed by sink handlers for ML, SQL, and websocket delivery.
 type fanoutEvent struct {
-	sample  TempSample
+	record  RecordEvent
 	payload []byte
 }
 
@@ -69,7 +72,7 @@ func (m *ModbusLoop) startFanoutWorkers(ctx context.Context) {
 	} else {
 		log.Printf("Sink=ml disabled: ML_API_URL is empty")
 	}
-	go m.runSink(ctx, "sql", m.sqlCh, m.deliverToSQL)
+	go m.runSQLSink(ctx)
 	go m.runSink(ctx, "websocket", m.wsCh, m.deliverToWebsocket)
 }
 
@@ -109,7 +112,7 @@ func (m *ModbusLoop) enqueue(name string, sink chan<- fanoutEvent, event fanoutE
 	select {
 	case sink <- event:
 	default:
-		log.Printf("Sink=%s dropped sample id=%d", name, event.sample.ID)
+		log.Printf("Sink=%s dropped event type=%s", name, event.record.EventType())
 	}
 }
 
@@ -127,7 +130,7 @@ func (m *ModbusLoop) enqueueML(ctx context.Context, event fanoutEvent) {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("Sink=ml canceled before enqueue sample id=%d", event.sample.ID)
+		log.Printf("Sink=ml canceled before enqueue event type=%s", event.record.EventType())
 	case m.mlCh <- event:
 	}
 }
@@ -166,6 +169,40 @@ func (m *ModbusLoop) runMLSink(ctx context.Context) {
 	}
 }
 
+// description: Drains SQL events, batches them, and flushes to SQLite on size or interval.
+// input: ctx (cancellation context for worker lifecycle).
+// output: None; logs batch delivery errors and exits on cancellation.
+func (m *ModbusLoop) runSQLSink(ctx context.Context) {
+	batch := make([]fanoutEvent, 0, m.sqlBatchSize)
+	ticker := time.NewTicker(m.sqlBatchFlushInterval)
+	defer ticker.Stop()
+
+	flush := func(flushCtx context.Context) {
+		if len(batch) == 0 {
+			return
+		}
+		if err := m.deliverSQLBatch(flushCtx, batch); err != nil {
+			log.Printf("Sink=sql error: %v", err)
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			flush(context.Background())
+			return
+		case event := <-m.sqlCh:
+			batch = append(batch, event)
+			if len(batch) >= m.sqlBatchSize {
+				flush(ctx)
+			}
+		case <-ticker.C:
+			flush(ctx)
+		}
+	}
+}
+
 // description: Encodes and posts a batch to the ML API, then stores the last valid JSON response body.
 // input: ctx (request lifecycle) and batch (one or more fanout events).
 // output: Returns error on request, non-2xx status, or invalid JSON response.
@@ -180,7 +217,24 @@ func (m *ModbusLoop) deliverMLBatch(ctx context.Context, batch []fanoutEvent) er
 	// Append all samples for marshaling
 	samples := make([]TempSample, 0, len(batch))
 	for _, event := range batch {
-		samples = append(samples, event.sample)
+		if event.record.EventType() != "temperature" {
+			log.Printf("Sink=ml skipped unsupported event type=%s", event.record.EventType())
+			continue
+		}
+
+		sample, ok := event.record.Payload().(TempSample)
+		if !ok {
+			if samplePtr, ok := event.record.Payload().(*TempSample); ok && samplePtr != nil {
+				samples = append(samples, *samplePtr)
+				continue
+			}
+			log.Printf("Sink=ml skipped malformed temperature payload type=%T", event.record.Payload())
+			continue
+		}
+		samples = append(samples, sample)
+	}
+	if len(samples) == 0 {
+		return nil
 	}
 
 	body, err := json.Marshal(mlBatchRequest{Samples: samples})
@@ -226,18 +280,114 @@ func (m *ModbusLoop) deliverMLBatch(ctx context.Context, batch []fanoutEvent) er
 	return nil
 }
 
-// description: Placeholder SQL sink handler for future persistence logic.
+// description: SQL sink handler compatibility wrapper for one-off writes.
 // input: context and fanout event.
-// output: Returns nil; no-op skeleton.
-func (m *ModbusLoop) deliverToSQL(_ context.Context, event fanoutEvent) error {
-	_ = event
+// output: Persists a single event by delegating to the batch path.
+func (m *ModbusLoop) deliverToSQL(ctx context.Context, event fanoutEvent) error {
+	return m.deliverSQLBatch(ctx, []fanoutEvent{event})
+}
+
+// description: Persists a batch of supported events in one transaction using sqlc-generated queries.
+// input: ctx (request lifecycle) and batch (one or more fanout events).
+// output: Returns error on transaction or insert failure.
+func (m *ModbusLoop) deliverSQLBatch(ctx context.Context, batch []fanoutEvent) error {
+	samples := make([]TempSample, 0, len(batch))
+	for _, event := range batch {
+		switch event.record.EventType() {
+		case "temperature":
+			sample, err := eventTempSample(event)
+			if err != nil {
+				return err
+			}
+			if !m.shouldPersistNormalSample(sample) {
+				continue
+			}
+			samples = append(samples, sample)
+		default:
+			log.Printf("Sink=sql skipped unsupported event type=%s", event.record.EventType())
+		}
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin SQL batch transaction: %w", err)
+	}
+	defer tx.Rollback()
+	qtx := m.queries.WithTx(tx)
+
+	for _, sample := range samples {
+		result, err := qtx.InsertTempSample(ctx, database.InsertTempSampleParams{
+			Timestamp:    sample.Timestamp,
+			SensorType:   sample.SensorType,
+			SensorNumber: int64(sample.SensorNumber),
+			FanOn:        sample.FanOn,
+			Temperature:  sample.Temperature,
+			HeaterPower:  sample.HeaterPower,
+		})
+		if err != nil {
+			return fmt.Errorf("insert temperature sample: %w", err)
+		}
+
+		tempSampleID, err := result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("read temperature sample id: %w", err)
+		}
+
+		for _, label := range sample.AnomalyLabels() {
+			if err := qtx.InsertTempSampleAnomaly(ctx, database.InsertTempSampleAnomalyParams{
+				TempSampleID: tempSampleID,
+				AnomalyLabel: label,
+				CreatedAt:    sample.Timestamp,
+			}); err != nil {
+				return fmt.Errorf("insert temperature anomaly %q: %w", label, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit SQL batch transaction: %w", err)
+	}
+
 	return nil
 }
 
-// description: Placeholder websocket sink handler for future broadcast logic.
+// description: Applies the configured sampling policy to normal events while always keeping anomalies.
+// input: sample (temperature sample being considered for SQL persistence).
+// output: Returns true when the sample should be written to SQL.
+func (m *ModbusLoop) shouldPersistNormalSample(sample TempSample) bool {
+	if len(sample.AnomalyLabels()) > 0 {
+		return true
+	}
+	if m.sqlNormalSampleRate <= 1 {
+		return true
+	}
+
+	m.sqlNormalSampleCount++
+	return m.sqlNormalSampleCount%m.sqlNormalSampleRate == 0
+}
+
+func eventTempSample(event fanoutEvent) (TempSample, error) {
+	payload := event.record.Payload()
+	switch sample := payload.(type) {
+	case TempSample:
+		return sample, nil
+	case *TempSample:
+		if sample == nil {
+			return TempSample{}, fmt.Errorf("temperature payload is nil")
+		}
+		return *sample, nil
+	default:
+		return TempSample{}, fmt.Errorf("temperature payload has unexpected type %T", payload)
+	}
+}
+
+// description: Placeholder websocket sink handler for future generic broadcast logic.
 // input: context and fanout event.
 // output: Returns nil; no-op skeleton.
 func (m *ModbusLoop) deliverToWebsocket(_ context.Context, event fanoutEvent) error {
-	_ = event
+	_ = event.payload
 	return nil
 }

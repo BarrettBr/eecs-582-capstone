@@ -5,11 +5,12 @@ Name: ingest/internal/ingest/modbus_loop.go
 Description: Main Modbus polling loop. Reads registers, builds a sample, validates it, then sends it to fanout sinks.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
-Dates Revised: 2026-02-15
+Dates Revised: 2026-02-28
 Revision History:
 - 2026-02-01: Barrett Brown: Created base file structure
 - 2026-02-13: Barrett Brown: Expanded / Made more in line with PLC structured data
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+- 2026-02-28, Barrett Brown: Added database as a part of the modbus constructor
 Preconditions:
 - Modbus TCP endpoint is reachable.
 - Validation rules file exists and config is set.
@@ -42,6 +43,7 @@ Known Faults:
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -57,23 +59,28 @@ import (
 // input: Constructed with database queries, poll settings, Modbus settings, and validation rules.
 // output: Produces validated TempSample events routed through the fan-out pipeline.
 type ModbusLoop struct {
-	client               modbus.Client
-	queries              *database.Queries
-	interval             time.Duration
-	mwBase               uint16
-	validator            *RuleEngine
-	sample               TempSample
-	jsonBuf              bytes.Buffer  // Writer that stores bytes for logging
-	jsonEncoder          *json.Encoder // Converts struct -> Json
-	mlCh                 chan fanoutEvent
-	sqlCh                chan fanoutEvent
-	wsCh                 chan fanoutEvent
-	mlAPIURL             string
-	mlHTTP               *http.Client
-	mlBatchSize          int
-	mlBatchFlushInterval time.Duration
-	mlDropOnOverload     bool
-	mlLastResponse       []byte
+	client                modbus.Client
+	db                    *sql.DB
+	queries               *database.Queries
+	interval              time.Duration
+	mwBase                uint16
+	validator             *RuleEngine
+	sample                TempSample
+	jsonBuf               bytes.Buffer  // Writer that stores bytes for logging
+	jsonEncoder           *json.Encoder // Converts struct -> Json
+	mlCh                  chan fanoutEvent
+	sqlCh                 chan fanoutEvent
+	wsCh                  chan fanoutEvent
+	mlAPIURL              string
+	mlHTTP                *http.Client
+	mlBatchSize           int
+	mlBatchFlushInterval  time.Duration
+	mlDropOnOverload      bool
+	mlLastResponse        []byte
+	sqlBatchSize          int
+	sqlBatchFlushInterval time.Duration
+	sqlNormalSampleRate   int
+	sqlNormalSampleCount  int
 }
 
 // description: ML fanout runtime settings for batching, transport, and overload behavior.
@@ -87,10 +94,19 @@ type MLFanoutConfig struct {
 	DropOnOverload     bool
 }
 
+// description: SQL fanout runtime settings for batching and normal-event sampling.
+// input: Provided by config at startup with env-derived values.
+// output: Consumed by NewModbusLoop to initialize SQL delivery behavior.
+type SQLFanoutConfig struct {
+	BatchSize          int
+	BatchFlushInterval time.Duration
+	NormalSampleRate   int
+}
+
 // description: Creates and initializes a ModbusLoop with Modbus client, validation engine, and fan-out channels.
 // input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
 // output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
-func NewModbusLoop(queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig) *ModbusLoop {
+func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig) *ModbusLoop {
 	// Setup the modbus handler & start the client listening to it
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
@@ -103,6 +119,15 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
+	if sqlCfg.BatchSize <= 0 {
+		sqlCfg.BatchSize = 1
+	}
+	if sqlCfg.BatchFlushInterval <= 0 {
+		sqlCfg.BatchFlushInterval = 25 * time.Millisecond
+	}
+	if sqlCfg.NormalSampleRate <= 0 {
+		sqlCfg.NormalSampleRate = 1
+	}
 
 	// Create the rule engine based on the validation file
 	validator, err := NewRuleEngine(ValidationFilePath)
@@ -113,6 +138,7 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 	// Create the ModbusLoop struct fill out and return it for use with future validation and reading
 	loop := &ModbusLoop{
 		client:    client,
+		db:        db,
 		queries:   queries,
 		interval:  interval,
 		mwBase:    mwBase,
@@ -130,9 +156,12 @@ func NewModbusLoop(queries *database.Queries, interval time.Duration, address st
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		mlBatchSize:          mlCfg.BatchSize,
-		mlBatchFlushInterval: mlCfg.BatchFlushInterval,
-		mlDropOnOverload:     mlCfg.DropOnOverload,
+		mlBatchSize:           mlCfg.BatchSize,
+		mlBatchFlushInterval:  mlCfg.BatchFlushInterval,
+		mlDropOnOverload:      mlCfg.DropOnOverload,
+		sqlBatchSize:          sqlCfg.BatchSize,
+		sqlBatchFlushInterval: sqlCfg.BatchFlushInterval,
+		sqlNormalSampleRate:   sqlCfg.NormalSampleRate,
 	}
 	loop.jsonEncoder = json.NewEncoder(&loop.jsonBuf)
 	loop.jsonEncoder.SetEscapeHTML(false) // Shouldn't matter atm due to us sending int / uints back but a later protection
@@ -200,7 +229,7 @@ func (m *ModbusLoop) handleTick(ctx context.Context) error {
 	sample := m.sample
 	sample.Anomalies = append([]string(nil), m.sample.Anomalies...)
 	payload := append([]byte(nil), m.jsonBuf.Bytes()...)
-	m.fanOut(ctx, fanoutEvent{sample: sample, payload: payload})
+	m.fanOut(ctx, fanoutEvent{record: sample, payload: payload})
 	return nil
 }
 

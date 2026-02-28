@@ -6,6 +6,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
@@ -13,7 +14,8 @@ type Querier interface {
 	DeleteUsers(ctx context.Context) error
 	GetAllTempSamples(ctx context.Context) ([]TempSample, error)
 	GetTempSampleByID(ctx context.Context, id int64) (TempSample, error)
-	InsertTempSample(ctx context.Context, arg InsertTempSampleParams) error
+	InsertTempSample(ctx context.Context, arg InsertTempSampleParams) (sql.Result, error)
+	InsertTempSampleAnomaly(ctx context.Context, arg InsertTempSampleAnomalyParams) error
 	LookupUser(ctx context.Context, username string) (User, error)
 	LookupUserByID(ctx context.Context, id string) (User, error)
 }

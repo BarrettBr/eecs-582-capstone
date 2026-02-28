@@ -11,7 +11,7 @@ import (
 )
 
 const getAllTempSamples = `-- name: GetAllTempSamples :many
-SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power, anomalies
+SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
 FROM temp_samples
 `
 
@@ -32,7 +32,6 @@ func (q *Queries) GetAllTempSamples(ctx context.Context) ([]TempSample, error) {
 			&i.FanOn,
 			&i.Temperature,
 			&i.HeaterPower,
-			&i.Anomalies,
 		); err != nil {
 			return nil, err
 		}
@@ -48,7 +47,7 @@ func (q *Queries) GetAllTempSamples(ctx context.Context) ([]TempSample, error) {
 }
 
 const getTempSampleByID = `-- name: GetTempSampleByID :one
-SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power, anomalies
+SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
 FROM temp_samples
 WHERE id = ?
 `
@@ -64,36 +63,49 @@ func (q *Queries) GetTempSampleByID(ctx context.Context, id int64) (TempSample, 
 		&i.FanOn,
 		&i.Temperature,
 		&i.HeaterPower,
-		&i.Anomalies,
 	)
 	return i, err
 }
 
-const insertTempSample = `-- name: InsertTempSample :exec
+const insertTempSample = `-- name: InsertTempSample :execresult
 INSERT INTO temp_samples (
-    timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power, anomalies
-) VALUES (?, ?, ?, ?, ?, ?, ?)
+    timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
+) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type InsertTempSampleParams struct {
-	Timestamp    string         `json:"timestamp"`
-	SensorType   string         `json:"sensor_type"`
-	SensorNumber int64          `json:"sensor_number"`
-	FanOn        bool           `json:"fan_on"`
-	Temperature  float64        `json:"temperature"`
-	HeaterPower  float64        `json:"heater_power"`
-	Anomalies    sql.NullString `json:"anomalies"`
+	Timestamp    string  `json:"timestamp"`
+	SensorType   string  `json:"sensor_type"`
+	SensorNumber int64   `json:"sensor_number"`
+	FanOn        bool    `json:"fan_on"`
+	Temperature  float64 `json:"temperature"`
+	HeaterPower  float64 `json:"heater_power"`
 }
 
-func (q *Queries) InsertTempSample(ctx context.Context, arg InsertTempSampleParams) error {
-	_, err := q.db.ExecContext(ctx, insertTempSample,
+func (q *Queries) InsertTempSample(ctx context.Context, arg InsertTempSampleParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, insertTempSample,
 		arg.Timestamp,
 		arg.SensorType,
 		arg.SensorNumber,
 		arg.FanOn,
 		arg.Temperature,
 		arg.HeaterPower,
-		arg.Anomalies,
 	)
+}
+
+const insertTempSampleAnomaly = `-- name: InsertTempSampleAnomaly :exec
+INSERT INTO temp_sample_anomalies (
+    temp_sample_id, anomaly_label, created_at
+) VALUES (?, ?, ?)
+`
+
+type InsertTempSampleAnomalyParams struct {
+	TempSampleID int64  `json:"temp_sample_id"`
+	AnomalyLabel string `json:"anomaly_label"`
+	CreatedAt    string `json:"created_at"`
+}
+
+func (q *Queries) InsertTempSampleAnomaly(ctx context.Context, arg InsertTempSampleAnomalyParams) error {
+	_, err := q.db.ExecContext(ctx, insertTempSampleAnomaly, arg.TempSampleID, arg.AnomalyLabel, arg.CreatedAt)
 	return err
 }
