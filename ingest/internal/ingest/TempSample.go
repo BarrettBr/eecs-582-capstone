@@ -5,10 +5,11 @@ Name: ingest/internal/ingest/TempSample.go
 Description: Defines the sample data shape used by ingest and a helper to get UTC time.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
-Dates Revised: 2026-02-15
+Dates Revised: 2026-02-28
 Revision History:
 - 2026-02-01, Barrett Brown: Created File and filled out
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+- 2026-02-28, Barrett Brown: Added more generic toRecord method and other helper functions for use with generic data
 Preconditions:
 - System clock is available for timestamp generation.
 Acceptable Input Values/Types:
@@ -45,6 +46,36 @@ type TempSample struct {
 	Temperature  float64  `json:"temperature"`
 	HeaterPower  float64  `json:"heater_power"`
 	Anomalies    []string `json:"anomalies,omitempty"`
+}
+
+// ToRecord returns the validation-facing normalized field map for a temperature sample.
+func (s TempSample) ToRecord() map[string]any {
+	return map[string]any{
+		"id":            s.ID,
+		"timestamp":     s.Timestamp,
+		"sensor_type":   s.SensorType,
+		"sensor_number": s.SensorNumber,
+		"fan_on":        s.FanOn,
+		"temperature":   s.Temperature,
+		"heater_power":  s.HeaterPower,
+		"anomalies":     append([]string(nil), s.Anomalies...),
+	}
+}
+
+// EventType returns the routing key for temperature samples.
+func (s TempSample) EventType() string {
+	_ = s
+	return "temperature"
+}
+
+// Payload returns the concrete transport payload for this sample.
+func (s TempSample) Payload() any {
+	return s
+}
+
+// AnomalyLabels returns a copy of the sample anomaly labels. Used as a helper function
+func (s TempSample) AnomalyLabels() []string {
+	return append([]string(nil), s.Anomalies...)
 }
 
 // description: Produces the current UTC timestamp in RFC3339Nano format.

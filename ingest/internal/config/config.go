@@ -42,6 +42,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
@@ -52,20 +53,25 @@ import (
 // input: Populated by Load using environment variables and defaults.
 // output: Used by main to initialize DB, Modbus polling, and validation settings.
 type Config struct {
-	DB                   *sql.DB
-	Queries              *database.Queries
-	Secret               string
-	SQLitePath           string
-	MigrationsPath       string
-	ModbusPollInterval   time.Duration
-	ModbusAddress        string
-	ModbusMWBase         uint16 // uint since modbus usually expects these
-	ValidationFilePath   string
-	MLAPIURL             string
-	MLHTTPTimeout        time.Duration
-	MLBatchSize          int
-	MLBatchFlushInterval time.Duration
-	MLDropOnOverload     bool
+	DB                    *sql.DB
+	Queries               *database.Queries
+	Secret                string
+	SQLitePath            string
+	SQLiteEnableWAL       bool
+	SQLiteSynchronous     string
+	MigrationsPath        string
+	ModbusPollInterval    time.Duration
+	ModbusAddress         string
+	ModbusMWBase          uint16 // uint since modbus usually expects these
+	ValidationFilePath    string
+	MLAPIURL              string
+	MLHTTPTimeout         time.Duration
+	MLBatchSize           int
+	MLBatchFlushInterval  time.Duration
+	MLDropOnOverload      bool
+	SQLBatchSize          int
+	SQLBatchFlushInterval time.Duration
+	SQLNormalSampleRate   int
 }
 
 // description: Builds and validates service configuration, opens SQLite, and initializes query helpers.
@@ -78,6 +84,7 @@ func Load() (*Config, error) {
 	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
 	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
 	mlAPIURL := getEnv("ML_API_URL", "")
+	sqliteSynchronous := getEnv("SQLITE_SYNCHRONOUS", "NORMAL")
 
 	// Make sure the env you loaded for sqlite is real and can connect properly
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
@@ -92,6 +99,16 @@ func Load() (*Config, error) {
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("Error pinging sqlite db: %w", err)
+	}
+
+	sqliteEnableWAL, err := getBoolEnv("SQLITE_ENABLE_WAL", true)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := applySQLiteTuning(db, sqliteEnableWAL, sqliteSynchronous); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 
 	// Make sure a poll interval exists if not give it a fallback and parse the duration of it
@@ -136,22 +153,57 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	sqlBatchFlushInterval, err := getDurationEnv("SQL_BATCH_FLUSH_INTERVAL", 25*time.Millisecond)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if sqlBatchFlushInterval <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("SQL_BATCH_FLUSH_INTERVAL must be > 0")
+	}
+
+	sqlBatchSize, err := getIntEnv("SQL_BATCH_SIZE", 256)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if sqlBatchSize <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("SQL_BATCH_SIZE must be > 0")
+	}
+
+	sqlNormalSampleRate, err := getIntEnv("SQL_NORMAL_SAMPLE_RATE", 1)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if sqlNormalSampleRate <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("SQL_NORMAL_SAMPLE_RATE must be > 0")
+	}
+
 	// Return a config item
 	return &Config{
-		DB:                   db,
-		Queries:              database.New(db),
-		Secret:               os.Getenv("SECRET"),
-		SQLitePath:           sqlitePath,
-		MigrationsPath:       migrationsPath,
-		ModbusPollInterval:   modbusPollInterval,
-		ModbusAddress:        modbusAddress,
-		ModbusMWBase:         modbusMWBase,
-		ValidationFilePath:   ValidationFilePath,
-		MLAPIURL:             mlAPIURL,
-		MLHTTPTimeout:        mlHTTPTimeout,
-		MLBatchSize:          mlBatchSize,
-		MLBatchFlushInterval: mlBatchFlushInterval,
-		MLDropOnOverload:     mlDropOnOverload,
+		DB:                    db,
+		Queries:               database.New(db),
+		Secret:                os.Getenv("SECRET"),
+		SQLitePath:            sqlitePath,
+		SQLiteEnableWAL:       sqliteEnableWAL,
+		SQLiteSynchronous:     sqliteSynchronous,
+		MigrationsPath:        migrationsPath,
+		ModbusPollInterval:    modbusPollInterval,
+		ModbusAddress:         modbusAddress,
+		ModbusMWBase:          modbusMWBase,
+		ValidationFilePath:    ValidationFilePath,
+		MLAPIURL:              mlAPIURL,
+		MLHTTPTimeout:         mlHTTPTimeout,
+		MLBatchSize:           mlBatchSize,
+		MLBatchFlushInterval:  mlBatchFlushInterval,
+		MLDropOnOverload:      mlDropOnOverload,
+		SQLBatchSize:          sqlBatchSize,
+		SQLBatchFlushInterval: sqlBatchFlushInterval,
+		SQLNormalSampleRate:   sqlNormalSampleRate,
 	}, nil
 }
 
@@ -250,4 +302,27 @@ func ensureSQLiteFile(dbPath string) error {
 		return fmt.Errorf("Error creating SQLite file %s: %w", dbPath, err)
 	}
 	return f.Close()
+}
+
+// description: Applies SQLite performance-oriented PRAGMA settings after opening the DB.
+// input: db (open sqlite handle), enableWAL (whether to use WAL mode), synchronous (sqlite synchronous mode).
+// output: Returns nil on success or an error if any PRAGMA fails.
+func applySQLiteTuning(db *sql.DB, enableWAL bool, synchronous string) error {
+	mode := strings.ToUpper(strings.TrimSpace(synchronous))
+	switch mode {
+	case "OFF", "NORMAL", "FULL", "EXTRA":
+	default:
+		return fmt.Errorf("SQLITE_SYNCHRONOUS must be one of OFF, NORMAL, FULL, EXTRA")
+	}
+
+	if enableWAL {
+		if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+			return fmt.Errorf("Error enabling sqlite WAL mode: %w", err)
+		}
+	}
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA synchronous=%s;", mode)); err != nil {
+		return fmt.Errorf("Error setting sqlite synchronous mode: %w", err)
+	}
+
+	return nil
 }

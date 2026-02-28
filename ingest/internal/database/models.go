@@ -5,19 +5,24 @@
 package database
 
 import (
-	"database/sql"
 	"time"
 )
 
 type TempSample struct {
-	ID           int64          `json:"id"`
-	Timestamp    string         `json:"timestamp"`
-	SensorType   string         `json:"sensor_type"`
-	SensorNumber int64          `json:"sensor_number"`
-	FanOn        bool           `json:"fan_on"`
-	Temperature  float64        `json:"temperature"`
-	HeaterPower  float64        `json:"heater_power"`
-	Anomalies    sql.NullString `json:"anomalies"`
+	ID           int64   `json:"id"`
+	Timestamp    string  `json:"timestamp"`
+	SensorType   string  `json:"sensor_type"`
+	SensorNumber int64   `json:"sensor_number"`
+	FanOn        bool    `json:"fan_on"`
+	Temperature  float64 `json:"temperature"`
+	HeaterPower  float64 `json:"heater_power"`
+}
+
+type TempSampleAnomaly struct {
+	ID           int64  `json:"id"`
+	TempSampleID int64  `json:"temp_sample_id"`
+	AnomalyLabel string `json:"anomaly_label"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type User struct {

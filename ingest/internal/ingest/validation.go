@@ -5,10 +5,11 @@ Name: ingest/internal/ingest/validation.go
 Description: Loads validation rules from JSON and checks each sample for required fields, bounds, and anomalies.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
-Dates Revised: 2026-02-15
+Dates Revised: 2026-02-28
 Revision History:
 - 2026-02-13, Barrett Brown: Created file and started structing out
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
+- 2026-02-28, Barrett Brown: Changed to be based on generic toRecord interface instead of more hard coded reflect logic
 Preconditions:
 - Validation JSON file exists and matches expected format.
 - Input sample is a struct (or pointer to struct).
@@ -41,7 +42,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -85,7 +85,7 @@ type ValidationResult struct {
 // input: spec loaded from JSON rules file.
 // output: Provides Validate to evaluate samples consistently each tick.
 type RuleEngine struct {
-	spec ValidationSpec
+	Spec ValidationSpec
 }
 
 // description: Loads validation rules from disk and constructs a RuleEngine.
@@ -107,28 +107,21 @@ func NewRuleEngine(specPath string) (*RuleEngine, error) {
 		spec.Bounds = make(map[string]Bounds)
 	}
 
-	return &RuleEngine{spec: spec}, nil
+	return &RuleEngine{Spec: spec}, nil
 }
 
 // description: Validates one sample against required fields, bounds, and anomaly rules.
 // input: sample (struct or pointer-to-struct containing json-tagged fields).
 // output: Returns ValidationResult with validity status, errors, and anomaly labels.
-func (e *RuleEngine) Validate(sample any) ValidationResult {
-	// Convert the struct to a record format and then validate it
-	record, ok := structToRecord(sample)
-	if !ok {
-		return ValidationResult{
-			Valid:  false,
-			Errors: []string{"Sample value must be a struct or pointer to struct"},
-		}
-	}
-
+func (e *RuleEngine) Validate(sample RecordEvent) ValidationResult {
+	// Convert the sample to a record format and then validate it.
+	record := sample.ToRecord()
 	result := ValidationResult{
 		Valid: true,
 	}
 
 	// Go over record and make sure every required field exists
-	for _, field := range e.spec.RequiredFields {
+	for _, field := range e.Spec.RequiredFields {
 		value, exists := record[field]
 		if !exists || isMissingValue(value) {
 			result.Errors = append(result.Errors, fmt.Sprintf("Missing required field: %s", field))
@@ -136,7 +129,7 @@ func (e *RuleEngine) Validate(sample any) ValidationResult {
 	}
 
 	// Check over records bounds
-	for field, bound := range e.spec.Bounds {
+	for field, bound := range e.Spec.Bounds {
 		num, ok, errMsg := getFloatNumber(record, field)
 		if errMsg != "" {
 			result.Errors = append(result.Errors, errMsg)
@@ -156,7 +149,7 @@ func (e *RuleEngine) Validate(sample any) ValidationResult {
 	}
 
 	// Check over manual anomaly rules
-	for _, rule := range e.spec.AnomalyRules {
+	for _, rule := range e.Spec.AnomalyRules {
 		num, ok, errMsg := getFloatNumber(record, rule.Field)
 		if errMsg != "" {
 			result.Errors = append(result.Errors, errMsg)
@@ -182,46 +175,6 @@ func (e *RuleEngine) Validate(sample any) ValidationResult {
 		result.Valid = false
 	}
 	return result
-}
-
-// description: Converts a struct sample into a map keyed by JSON tag (or field name fallback).
-// input: sample (struct or pointer-to-struct).
-// output: Returns record map and true on success; empty map and false on invalid input.
-func structToRecord(sample any) (map[string]any, bool) {
-	record := make(map[string]any)
-
-	v := reflect.ValueOf(sample)
-	if !v.IsValid() {
-		return record, false
-	}
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return record, false
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return record, false
-	}
-
-	t := v.Type()
-	for i := range t.NumField() {
-		field := t.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
-
-		tag := field.Tag.Get("json")
-		name := strings.Split(tag, ",")[0]
-		if name == "" {
-			name = field.Name
-		}
-		if name == "-" {
-			continue
-		}
-		record[name] = v.Field(i).Interface()
-	}
-	return record, true
 }
 
 // description: Compares two float64 values using a string operator token.
