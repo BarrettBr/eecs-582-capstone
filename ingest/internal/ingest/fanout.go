@@ -273,6 +273,9 @@ func (m *ModbusLoop) deliverMLBatch(ctx context.Context, batch []fanoutEvent) er
 			return fmt.Errorf("ML response json parse: %w", err)
 		}
 		m.mlLastResponse = append(m.mlLastResponse[:0], trimmed...)
+		if m.streamer != nil {
+			m.streamer.PublishMLResult(trimmed)
+		}
 	} else {
 		m.mlLastResponse = m.mlLastResponse[:0]
 	}
@@ -384,10 +387,18 @@ func eventTempSample(event fanoutEvent) (TempSample, error) {
 	}
 }
 
-// description: Placeholder websocket sink handler for future generic broadcast logic.
+// description: Publishes one event to the websocket stream server for frontend display.
 // input: context and fanout event.
-// output: Returns nil; no-op skeleton.
+// output: Returns nil after enqueueing to the stream server when configured.
 func (m *ModbusLoop) deliverToWebsocket(_ context.Context, event fanoutEvent) error {
-	_ = event.payload
+	if m.streamer == nil {
+		return nil
+	}
+
+	timestamp := time.Now().UTC().Format(time.RFC3339Nano)
+	if sample, err := eventTempSample(event); err == nil {
+		timestamp = sample.Timestamp
+	}
+	m.streamer.PublishEvent(event.record.EventType(), event.payload, timestamp)
 	return nil
 }

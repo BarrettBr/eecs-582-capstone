@@ -69,6 +69,10 @@ type Config struct {
 	MLBatchSize           int
 	MLBatchFlushInterval  time.Duration
 	MLDropOnOverload      bool
+	WSAddress             string
+	WSPath                string
+	WSBatchSize           int
+	WSBatchFlushInterval  time.Duration
 	SQLBatchSize          int
 	SQLBatchFlushInterval time.Duration
 	SQLNormalSampleRate   int
@@ -85,6 +89,8 @@ func Load() (*Config, error) {
 	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
 	mlAPIURL := getEnv("ML_API_URL", "")
 	sqliteSynchronous := getEnv("SQLITE_SYNCHRONOUS", "NORMAL")
+	wsAddress := getEnv("WS_ADDRESS", "127.0.0.1:8080")
+	wsPath := getEnv("WS_PATH", "/ws")
 
 	// Make sure the env you loaded for sqlite is real and can connect properly
 	if err := ensureSQLiteFile(sqlitePath); err != nil {
@@ -153,6 +159,26 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	wsBatchFlushInterval, err := getDurationEnv("WS_BATCH_FLUSH_INTERVAL", 50*time.Millisecond)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if wsBatchFlushInterval <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("WS_BATCH_FLUSH_INTERVAL must be > 0")
+	}
+
+	wsBatchSize, err := getIntEnv("WS_BATCH_SIZE", 16)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if wsBatchSize <= 0 {
+		_ = db.Close()
+		return nil, fmt.Errorf("WS_BATCH_SIZE must be > 0")
+	}
+
 	sqlBatchFlushInterval, err := getDurationEnv("SQL_BATCH_FLUSH_INTERVAL", 25*time.Millisecond)
 	if err != nil {
 		_ = db.Close()
@@ -201,6 +227,10 @@ func Load() (*Config, error) {
 		MLBatchSize:           mlBatchSize,
 		MLBatchFlushInterval:  mlBatchFlushInterval,
 		MLDropOnOverload:      mlDropOnOverload,
+		WSAddress:             wsAddress,
+		WSPath:                wsPath,
+		WSBatchSize:           wsBatchSize,
+		WSBatchFlushInterval:  wsBatchFlushInterval,
 		SQLBatchSize:          sqlBatchSize,
 		SQLBatchFlushInterval: sqlBatchFlushInterval,
 		SQLNormalSampleRate:   sqlNormalSampleRate,

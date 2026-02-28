@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
 	"github.com/goburrow/modbus"
 )
 
@@ -77,6 +78,7 @@ type ModbusLoop struct {
 	mlBatchFlushInterval  time.Duration
 	mlDropOnOverload      bool
 	mlLastResponse        []byte
+	streamer              *stream.Server
 	sqlBatchSize          int
 	sqlBatchFlushInterval time.Duration
 	sqlNormalSampleRate   int
@@ -106,7 +108,7 @@ type SQLFanoutConfig struct {
 // description: Creates and initializes a ModbusLoop with Modbus client, validation engine, and fan-out channels.
 // input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
 // output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
-func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig) *ModbusLoop {
+func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig, wsServer *stream.Server) *ModbusLoop {
 	// Setup the modbus handler & start the client listening to it
 	handler := modbus.NewTCPClientHandler(address)
 	handler.Timeout = 10 * time.Second
@@ -159,6 +161,7 @@ func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration
 		mlBatchSize:           mlCfg.BatchSize,
 		mlBatchFlushInterval:  mlCfg.BatchFlushInterval,
 		mlDropOnOverload:      mlCfg.DropOnOverload,
+		streamer:              wsServer,
 		sqlBatchSize:          sqlCfg.BatchSize,
 		sqlBatchFlushInterval: sqlCfg.BatchFlushInterval,
 		sqlNormalSampleRate:   sqlCfg.NormalSampleRate,
