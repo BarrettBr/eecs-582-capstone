@@ -1,6 +1,6 @@
 // Name: main.ts
 //Description: The main entry point for declaring Dependencies and initializing the app
-//Programmers: Adam Berry 
+//Programmers: Adam Berry
 //Creation Date: 2/14
 //Revision Dates: Adam Berry 2/14, Adam Berry 2/15
 //Preconditions: Not Relevant
@@ -16,7 +16,7 @@ import { createPinia } from "pinia";
 
 import PrimeVue from "primevue/config";
 import Aura from "@primeuix/themes/aura";
-import 'primeicons/primeicons.css'
+import "primeicons/primeicons.css";
 
 import App from "./App.vue";
 import router from "./router";
@@ -29,9 +29,9 @@ app.use(PrimeVue, {
 	theme: {
 		preset: Aura,
 		options: {
-			darkModeSelector: '.app-dark'
+			darkModeSelector: ".app-dark",
 		},
-	}
+	},
 });
 
 app.mount("#app");

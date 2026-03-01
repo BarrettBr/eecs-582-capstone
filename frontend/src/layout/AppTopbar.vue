@@ -73,9 +73,7 @@ function toggleUserMenu(event: Event) {
 					size="normal"
 					class="topbar-avatar"
 				/>
-				<span class="topbar-username hidden-mobile">{{
-					"User"
-				}}</span>
+				<span class="topbar-username hidden-mobile">{{ "User" }}</span>
 				<i class="pi pi-chevron-down hidden-mobile" style="font-size: 0.7rem" />
 			</Button>
 
@@ -139,4 +137,3 @@ function toggleUserMenu(event: Event) {
 	}
 }
 </style>
-

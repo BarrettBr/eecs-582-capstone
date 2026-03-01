@@ -16,7 +16,6 @@ import { computed } from "vue";
 import AppMenuItem from "./AppMenuItem.vue";
 import type { MenuItem } from "./AppMenuItem.vue";
 
-
 const allItems: MenuItem[] = [
 	{
 		label: "Dashboard",
@@ -36,7 +35,6 @@ const allItems: MenuItem[] = [
 		],
 	},
 ];
-
 </script>
 
 <template>
