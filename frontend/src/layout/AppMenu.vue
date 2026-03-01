@@ -10,32 +10,54 @@ Error Types: Not Relevant
 Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
-
-<script setup>
-import { ref } from "vue";
+<script setup lang="ts">
+import { computed } from "vue";
 import AppMenuItem from "./AppMenuItem.vue";
+import type { MenuItem } from "./AppMenuItem.vue";
 
-const model = ref([
+
+const allItems: MenuItem[] = [
 	{
+		label: "Dashboard",
+		icon: "pi pi-home",
+		to: "/dashboard",
+	},
+	{ separator: true },
+	{
+		label: "Other",
+		icon: "pi pi-comments",
 		items: [
-			{ label: "Home", icon: "pi pi-fw pi-home", to: "/" },
 			{
-				label: "Dashboard",
-				icon: "pi pi-fw pi-th-large",
-				to: "/dashboard"
+				label: "All Requests",
+				icon: "pi pi-info-circle",
+				to: "/about",
 			},
-			{ label: "Charts", icon: "pi pi-fw pi-chart-line", to: "/chartdoc" }
-		]
-	}
-]);
+		],
+	},
+];
+
 </script>
 
 <template>
-	<ul class="layout-menu">
-		<template v-for="(item, i) in model[0].items" :key="item.label">
-			<app-menu-item :item="item" :index="i" :root="true"></app-menu-item>
-		</template>
-	</ul>
+	<nav class="layout-menu" aria-label="Main navigation">
+		<ul class="menu-root">
+			<AppMenuItem
+				v-for="item in allItems"
+				:key="item.label ?? 'sep'"
+				:item="item"
+			/>
+		</ul>
+	</nav>
 </template>
 
-<style lang="scss" scoped></style>
+<style scoped>
+.layout-menu {
+	padding: 0.5rem 0;
+}
+
+.menu-root {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+</style>
