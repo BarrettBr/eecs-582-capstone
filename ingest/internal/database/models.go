@@ -31,3 +31,19 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type ValveSample struct {
+	ID          int64   `json:"id"`
+	Timestamp   string  `json:"timestamp"`
+	SensorType  string  `json:"sensor_type"`
+	ValveNumber int64   `json:"valve_number"`
+	IsOpen      bool    `json:"is_open"`
+	FlowRate    float64 `json:"flow_rate"`
+}
+
+type ValveSampleAnomaly struct {
+	ID            int64  `json:"id"`
+	ValveSampleID int64  `json:"valve_sample_id"`
+	AnomalyLabel  string `json:"anomaly_label"`
+	CreatedAt     string `json:"created_at"`
+}

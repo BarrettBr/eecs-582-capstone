@@ -63,6 +63,7 @@ type Config struct {
 	ModbusPollInterval    time.Duration
 	ModbusAddress         string
 	ModbusMWBase          uint16 // uint since modbus usually expects these
+	SourceConfigPath      string
 	ValidationFilePath    string
 	MLAPIURL              string
 	MLHTTPTimeout         time.Duration
@@ -86,6 +87,7 @@ func Load() (*Config, error) {
 	sqlitePath := getEnv("SQLITE_PATH", "./data/app.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "sql/schema")
 	modbusAddress := getEnv("MODBUS_ADDRESS", "127.0.0.1:1502")
+	sourceConfigPath := getEnv("SOURCE_CONFIG_PATH", "config/sources.json")
 	ValidationFilePath := getEnv("VALIDATION_FILE_PATH", "config/validation_rules.json")
 	mlAPIURL := getEnv("ML_API_URL", "")
 	sqliteSynchronous := getEnv("SQLITE_SYNCHRONOUS", "NORMAL")
@@ -221,6 +223,7 @@ func Load() (*Config, error) {
 		ModbusPollInterval:    modbusPollInterval,
 		ModbusAddress:         modbusAddress,
 		ModbusMWBase:          modbusMWBase,
+		SourceConfigPath:      sourceConfigPath,
 		ValidationFilePath:    ValidationFilePath,
 		MLAPIURL:              mlAPIURL,
 		MLHTTPTimeout:         mlHTTPTimeout,

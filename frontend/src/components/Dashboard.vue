@@ -20,6 +20,7 @@ import {
 	connect as connectSocket,
 	getDefaultStreamURL,
 	onBatch,
+	send as sendSocket,
 	type ManagedWebSocket,
 	type StreamBatch,
 	type StreamMessage
@@ -42,6 +43,16 @@ interface TempEventData {
 	anomalies?: string[];
 }
 
+interface ValveEventData {
+	id?: number;
+	timestamp: string;
+	sensor_type?: string;
+	valve_number?: number;
+	is_open?: boolean;
+	flow_rate?: number;
+	anomalies?: string[];
+}
+
 interface MLAnomalyPayload {
 	schema: string;
 	event_type: string;
@@ -54,8 +65,10 @@ interface MLAnomalyPayload {
 
 const loading = ref(true);
 const recentEvents = ref<TempEventData[]>([]);
+const recentValveEvents = ref<ValveEventData[]>([]);
 const mlAlerts = ref<MLAnomalyPayload[]>([]);
 const streamState = ref("Connecting...");
+const faultStatus = ref("Idle");
 let socket: ManagedWebSocket | null = null;
 
 const status = ref<SystemStatus>({
@@ -94,6 +107,27 @@ function pushMLAlert(message: MLAnomalyPayload): void {
 	updateActiveAlerts();
 }
 
+function pushValveEvent(event: ValveEventData): void {
+	recentValveEvents.value.unshift(event);
+	recentValveEvents.value = recentValveEvents.value.slice(0, 8);
+	metrics.value.totalRecords += 1;
+	metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
+	console.log("Valve stream event received", event);
+	updateActiveAlerts();
+}
+
+function injectSimulatorFault(): void {
+	const sent = sendSocket(socket, {
+		kind: "inject_fault",
+		source: "frontend",
+		timestamp: new Date().toISOString(),
+		data: {
+			source_name: "temp_dev"
+		}
+	});
+	faultStatus.value = sent ? "Injected" : "Failed to send";
+}
+
 function handleStreamMessage(batch: StreamBatch): void {
 	if (batch.kind !== "batch" || !Array.isArray(batch.messages)) {
 		return;
@@ -102,8 +136,14 @@ function handleStreamMessage(batch: StreamBatch): void {
 	console.log("Websocket batch received", batch);
 
 	for (const message of batch.messages) {
-		if (message.kind === "event" && message.event_type === "temperature") {
-			pushRecentEvent(message.data as TempEventData);
+		if (message.kind === "event") {
+			if (message.event_type === "temperature") {
+				pushRecentEvent(message.data as TempEventData);
+				continue;
+			}
+			if (message.event_type === "valve") {
+				pushValveEvent(message.data as ValveEventData);
+			}
 			continue;
 		}
 		if (message.kind === "ml_result") {
@@ -189,6 +229,13 @@ onBeforeUnmount(() => {
 							<strong>Last Ingest:</strong>
 							{{ metrics.lastIngest }}
 						</li>
+						<li>
+							<strong>Fault Injector:</strong>
+							<button type="button" @click="injectSimulatorFault">
+								Inject Fault
+							</button>
+							{{ faultStatus }}
+						</li>
 					</ul>
 				</template>
 			</Card>
@@ -219,6 +266,25 @@ onBeforeUnmount(() => {
 						<li v-if="mlAlerts.length === 0">No ML alerts yet</li>
 						<li v-for="(alert, index) in mlAlerts" :key="index">
 							{{ JSON.stringify(alert) }}
+						</li>
+					</ul>
+				</template>
+			</Card>
+
+			<Card class="card">
+				<template #title>Valve Events</template>
+				<template #content>
+					<ul class="metrics-list">
+						<li v-if="recentValveEvents.length === 0">No valve events yet</li>
+						<li
+							v-for="event in recentValveEvents"
+							:key="event.timestamp"
+						>
+							{{ new Date(event.timestamp).toLocaleTimeString() }}
+							flow {{ event.flow_rate ?? "n/a" }}
+							<span v-if="event.anomalies && event.anomalies.length > 0">
+								alerts {{ event.anomalies.join(", ") }}
+							</span>
 						</li>
 					</ul>
 				</template>

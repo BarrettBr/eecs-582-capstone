@@ -1,0 +1,48 @@
+{
+  "sources": [
+    {
+      "name": "temp_dev",
+      "event_type": "temperature",
+      "mode": "simulator",
+      "enabled": true,
+      "validation_file": "config/validation/temperature.json",
+      "sql_target": "temp_samples",
+      "ml_enabled": true,
+      "simulator": {
+        "interval": "100ms",
+        "seed": 42,
+        "profile": "temperature_default"
+      }
+    },
+    {
+      "name": "temp_plc",
+      "event_type": "temperature",
+      "mode": "modbus",
+      "enabled": false,
+      "validation_file": "config/validation/temperature.json",
+      "sql_target": "temp_samples",
+      "ml_enabled": true,
+      "modbus": {
+        "address": "127.0.0.1:1502",
+        "mw_base": 1024,
+        "register_count": 6,
+        "slave_id": 1
+      }
+    },
+    {
+      "name": "valve_plc",
+      "event_type": "valve",
+      "mode": "modbus",
+      "enabled": false,
+      "validation_file": "config/validation/valve.json",
+      "sql_target": "valve_samples",
+      "ml_enabled": true,
+      "modbus": {
+        "address": "127.0.0.1:1502",
+        "mw_base": 1100,
+        "register_count": 5,
+        "slave_id": 1
+      }
+    }
+  ]
+}

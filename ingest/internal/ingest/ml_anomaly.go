@@ -45,10 +45,10 @@ type MLAnomalyPayload struct {
 	RawResponse json.RawMessage `json:"raw_response"`
 }
 
-func normalizeMLAnomalyPayload(parsed any, raw []byte) MLAnomalyPayload {
+func normalizeMLAnomalyPayload(eventType string, parsed any, raw []byte) MLAnomalyPayload {
 	payload := MLAnomalyPayload{
 		Schema:      "ml_anomaly_v1",
-		EventType:   "temperature",
+		EventType:   eventType,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		Labels:      make([]string, 0),
 		RawResponse: append([]byte(nil), raw...),

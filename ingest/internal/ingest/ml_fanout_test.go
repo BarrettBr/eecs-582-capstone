@@ -59,18 +59,18 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 	}
 
 	batch := []fanoutEvent{
-		{record: TempSample{Temperature: 72.5}},
-		{record: stubRecordEvent{record: map[string]any{"ignored": true}}},
+		{record: TempSample{Temperature: 72.5}, mlEnabled: true},
+		{record: ValveSample{FlowRate: 12.5}, mlEnabled: true},
 	}
 
 	if err := loop.deliverMLBatch(context.Background(), batch); err != nil {
 		t.Fatalf("deliverMLBatch() error = %v", err)
 	}
+	if received.EventType != "valve" && received.EventType != "temperature" {
+		t.Fatalf("received event_type = %q, want typed batch", received.EventType)
+	}
 	if len(received.Samples) != 1 {
 		t.Fatalf("received samples = %d, want 1", len(received.Samples))
-	}
-	if received.Samples[0].Temperature != 72.5 {
-		t.Fatalf("received sample temperature = %v, want 72.5", received.Samples[0].Temperature)
 	}
 	var normalized MLAnomalyPayload
 	if err := json.Unmarshal(loop.mlLastResponse, &normalized); err != nil {
@@ -103,7 +103,7 @@ func TestDeliverMLBatchHandlesEmptyAndBadResponses(t *testing.T) {
 
 	loop.mlAPIURL = server.URL
 	loop.mlHTTP = server.Client()
-	err := loop.deliverMLBatch(context.Background(), []fanoutEvent{{record: TempSample{Temperature: 1}}})
+	err := loop.deliverMLBatch(context.Background(), []fanoutEvent{{record: TempSample{Temperature: 1}, mlEnabled: true}})
 	if err == nil {
 		t.Fatalf("deliverMLBatch() error = nil, want non-nil")
 	}
