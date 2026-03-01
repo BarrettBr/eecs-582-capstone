@@ -38,6 +38,7 @@ Known Faults:
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -80,20 +81,12 @@ func main() {
 		BatchSize:          appCfg.WSBatchSize,
 		BatchFlushInterval: appCfg.WSBatchFlushInterval,
 	})
-	go func() {
-		if err := wsServer.Start(ctx); err != nil {
-			log.Printf("Websocket server error: %v", err)
-		}
-	}()
-
 	// Create context that is canceled upon ctrl + c so it cancels the modbus loop
 	modbusLoop := ingest.NewModbusLoop(
 		appCfg.DB,
 		appCfg.Queries,
 		appCfg.ModbusPollInterval,
-		appCfg.ModbusAddress,
-		appCfg.ModbusMWBase,
-		appCfg.ValidationFilePath,
+		appCfg.SourceConfigPath,
 		ingest.MLFanoutConfig{
 			APIURL:             appCfg.MLAPIURL,
 			HTTPTimeout:        appCfg.MLHTTPTimeout,
@@ -108,6 +101,30 @@ func main() {
 		},
 		wsServer,
 	)
+
+	type faultInjectRequest struct {
+		SourceName string `json:"source_name"`
+	}
+	wsServer.RegisterReadHandler("inject_fault", func(_ context.Context, msg stream.Message) {
+		var req faultInjectRequest
+		if len(msg.Data) > 0 {
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				log.Printf("Fault injection decode error: %v", err)
+				return
+			}
+		}
+		if err := modbusLoop.TriggerFaultInjection(req.SourceName); err != nil {
+			log.Printf("Fault injection request failed: %v", err)
+			return
+		}
+		log.Printf("Fault injection triggered for source=%q", req.SourceName)
+	})
+
+	go func() {
+		if err := wsServer.Start(ctx); err != nil {
+			log.Printf("Websocket server error: %v", err)
+		}
+	}()
 
 	log.Printf("Modbus service ready. Poll interval: %s", appCfg.ModbusPollInterval)
 	log.Printf("Websocket stream ready at %s", wsServer.URL())

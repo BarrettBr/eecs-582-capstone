@@ -1,54 +1,16 @@
 package ingest
 
-/*
-Name: ingest/internal/ingest/modbus_loop.go
-Description: Main Modbus polling loop. Reads registers, builds a sample, validates it, then sends it to fanout sinks.
-Programmer: Barrett Brown
-Date Created: 2026-02-01
-Dates Revised: 2026-02-28
-Revision History:
-- 2026-02-01: Barrett Brown: Created base file structure
-- 2026-02-13: Barrett Brown: Expanded / Made more in line with PLC structured data
-- 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
-- 2026-02-28, Barrett Brown: Added database as a part of the modbus constructor
-Preconditions:
-- Modbus TCP endpoint is reachable.
-- Validation rules file exists and config is set.
-Acceptable Input Values/Types:
-- Modbus response bytes with expected length (12 bytes for current mapping).
-- Supported sensor type codes.
-- Context that can be canceled to stop the loop.
-Unacceptable Input Values/Types:
-- Incorrect register payload size or unsupported sensor type codes.
-- Bad validation file/path at startup.
-Postconditions:
-- Each successful tick sends one validated sample event to fanout.
-- Loop terminates when context is canceled.
-Return Values/Types:
-- NewModbusLoop: *ModbusLoop
-- Run/handleTick/dataNormalizer: error (nil = success)
-- sensorTypeFromCode: (string, error)
-Error/Exception Conditions:
-- Modbus read/parse/validation/JSON errors.
-- Startup failures in connect/rule load stop the process with log.Fatalf.
-Side Effects:
-- Reads from Modbus over network, updates sample state, enqueues events, writes logs.
-Invariants:
-- dataNormalizer expects exactly 12 bytes for current 6-register mapping.
-- Sample timestamp is always written in UTC each tick.
-Known Faults:
-- Uses fatal exits at startup instead of retry logic.
-*/
-
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
@@ -56,19 +18,12 @@ import (
 	"github.com/goburrow/modbus"
 )
 
-// description: Polling loop that reads Modbus registers, validates samples, and dispatches them to sinks.
-// input: Constructed with database queries, poll settings, Modbus settings, and validation rules.
-// output: Produces validated TempSample events routed through the fan-out pipeline.
 type ModbusLoop struct {
-	client                modbus.Client
 	db                    *sql.DB
 	queries               *database.Queries
 	interval              time.Duration
-	mwBase                uint16
-	validator             *RuleEngine
+	sources               []*sourceRunner
 	sample                TempSample
-	jsonBuf               bytes.Buffer  // Writer that stores bytes for logging
-	jsonEncoder           *json.Encoder // Converts struct -> Json
 	mlCh                  chan fanoutEvent
 	sqlCh                 chan fanoutEvent
 	wsCh                  chan fanoutEvent
@@ -82,12 +37,21 @@ type ModbusLoop struct {
 	sqlBatchSize          int
 	sqlBatchFlushInterval time.Duration
 	sqlNormalSampleRate   int
-	sqlNormalSampleCount  int
+	sqlNormalSampleCount  map[string]int
 }
 
-// description: ML fanout runtime settings for batching, transport, and overload behavior.
-// input: Provided by config at startup with env-derived values.
-// output: Consumed by NewModbusLoop to initialize ML delivery behavior.
+type sourceRunner struct {
+	definition      SourceDefinition
+	validator       *RuleEngine
+	interval        time.Duration
+	client          modbus.Client
+	mu              sync.Mutex
+	rng             *rand.Rand
+	simTemp         float64
+	simStep         uint16
+	forceFaultTicks int
+}
+
 type MLFanoutConfig struct {
 	APIURL             string
 	HTTPTimeout        time.Duration
@@ -96,28 +60,14 @@ type MLFanoutConfig struct {
 	DropOnOverload     bool
 }
 
-// description: SQL fanout runtime settings for batching and normal-event sampling.
-// input: Provided by config at startup with env-derived values.
-// output: Consumed by NewModbusLoop to initialize SQL delivery behavior.
 type SQLFanoutConfig struct {
 	BatchSize          int
 	BatchFlushInterval time.Duration
 	NormalSampleRate   int
 }
 
-// description: Creates and initializes a ModbusLoop with Modbus client, validation engine, and fan-out channels.
-// input: queries (DB query helper), interval (poll cadence), address (Modbus TCP endpoint), mwBase (register base), ValidationFilePath (rules file path).
-// output: Returns a ready ModbusLoop pointer; exits process on critical startup failures.
-func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, address string, mwBase uint16, ValidationFilePath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig, wsServer *stream.Server) *ModbusLoop {
-	// Setup the modbus handler & start the client listening to it
-	handler := modbus.NewTCPClientHandler(address)
-	handler.Timeout = 10 * time.Second
-	handler.SlaveId = 1
-	if err := handler.Connect(); err != nil {
-		log.Fatalf("Modbus connect failed (%s): %v", address, err)
-	}
-
-	client := modbus.NewClient(handler)
+// NewModbusLoop now builds the generalized ingest runtime from a source catalog.
+func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, sourceConfigPath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig, wsServer *stream.Server) *ModbusLoop {
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
@@ -130,25 +80,35 @@ func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration
 	if sqlCfg.NormalSampleRate <= 0 {
 		sqlCfg.NormalSampleRate = 1
 	}
-
-	// Create the rule engine based on the validation file
-	validator, err := NewRuleEngine(ValidationFilePath)
-	if err != nil {
-		log.Fatalf("Validation spec load failed (%s): %v", ValidationFilePath, err)
+	if mlCfg.BatchSize <= 0 {
+		mlCfg.BatchSize = 1
+	}
+	if mlCfg.BatchFlushInterval <= 0 {
+		mlCfg.BatchFlushInterval = 25 * time.Millisecond
+	}
+	if mlCfg.HTTPTimeout <= 0 {
+		mlCfg.HTTPTimeout = 500 * time.Millisecond
 	}
 
-	// Create the ModbusLoop struct fill out and return it for use with future validation and reading
-	loop := &ModbusLoop{
-		client:    client,
-		db:        db,
-		queries:   queries,
-		interval:  interval,
-		mwBase:    mwBase,
-		validator: validator,
-		mlCh:      make(chan fanoutEvent, 128),
-		sqlCh:     make(chan fanoutEvent, 128),
-		wsCh:      make(chan fanoutEvent, 128),
-		mlAPIURL:  mlCfg.APIURL,
+	catalog, err := LoadSourceCatalog(sourceConfigPath)
+	if err != nil {
+		log.Fatalf("Source config load failed (%s): %v", sourceConfigPath, err)
+	}
+
+	sources, err := buildSourceRunners(catalog, interval)
+	if err != nil {
+		log.Fatalf("Source initialization failed: %v", err)
+	}
+
+	return &ModbusLoop{
+		db:       db,
+		queries:  queries,
+		interval: interval,
+		sources:  sources,
+		mlCh:     make(chan fanoutEvent, 128),
+		sqlCh:    make(chan fanoutEvent, 128),
+		wsCh:     make(chan fanoutEvent, 128),
+		mlAPIURL: mlCfg.APIURL,
 		mlHTTP: &http.Client{
 			Timeout: mlCfg.HTTPTimeout,
 			Transport: &http.Transport{
@@ -165,115 +125,332 @@ func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration
 		sqlBatchSize:          sqlCfg.BatchSize,
 		sqlBatchFlushInterval: sqlCfg.BatchFlushInterval,
 		sqlNormalSampleRate:   sqlCfg.NormalSampleRate,
+		sqlNormalSampleCount:  make(map[string]int),
 	}
-	loop.jsonEncoder = json.NewEncoder(&loop.jsonBuf)
-	loop.jsonEncoder.SetEscapeHTML(false) // Shouldn't matter atm due to us sending int / uints back but a later protection
-	return loop
 }
 
-// description: Starts sink workers and continuously executes ingest ticks until context cancellation.
-// input: ctx (cancellation context controlling loop lifetime).
-// output: Returns context cancellation error on shutdown, otherwise runtime errors are logged per tick.
+func buildSourceRunners(catalog *SourceCatalog, defaultModbusInterval time.Duration) ([]*sourceRunner, error) {
+	sources := make([]*sourceRunner, 0, len(catalog.Sources))
+	for _, definition := range catalog.Sources {
+		validator, err := NewRuleEngine(definition.ValidationFile)
+		if err != nil {
+			return nil, fmt.Errorf("load validator for %q: %w", definition.Name, err)
+		}
+		if !definition.Enabled {
+			continue
+		}
+		runner := &sourceRunner{
+			definition: definition,
+			validator:  validator,
+		}
+		switch definition.Mode {
+		case "modbus":
+			// Each Modbus source maintains its own client and register settings.
+			handler := modbus.NewTCPClientHandler(definition.Modbus.Address)
+			handler.Timeout = 10 * time.Second
+			handler.SlaveId = definition.Modbus.SlaveID
+			if err := handler.Connect(); err != nil {
+				return nil, fmt.Errorf("connect source %q (%s): %w", definition.Name, definition.Modbus.Address, err)
+			}
+			runner.client = modbus.NewClient(handler)
+			runner.interval = defaultModbusInterval
+		case "simulator":
+			// The simulator keeps deterministic local state for repeatable dev data.
+			d, err := time.ParseDuration(definition.Simulator.Interval)
+			if err != nil {
+				return nil, fmt.Errorf("parse simulator interval for %q: %w", definition.Name, err)
+			}
+			runner.interval = d
+			runner.rng = rand.New(rand.NewSource(definition.Simulator.Seed))
+			runner.simTemp = 68.0
+		default:
+			return nil, fmt.Errorf("unsupported mode %q", definition.Mode)
+		}
+		sources = append(sources, runner)
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no enabled sources configured")
+	}
+	return sources, nil
+}
+
 func (m *ModbusLoop) Run(ctx context.Context) error {
-	// Start fanout workers to listen and consume jobs
+	// Start shared sinks first, then launch one worker goroutine per enabled source.
 	m.startFanoutWorkers(ctx)
 
-	// Tick on interval for reading
-	ticker := time.NewTicker(m.interval)
+	for _, source := range m.sources {
+		go m.runSource(ctx, source)
+	}
+
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (m *ModbusLoop) runSource(ctx context.Context, source *sourceRunner) {
+	if err := m.handleSourceTick(ctx, source); err != nil && !isContextCanceled(err) {
+		log.Printf("Source=%s initial tick failed: %v", source.definition.Name, err)
+	}
+
+	ticker := time.NewTicker(source.interval)
 	defer ticker.Stop()
 
 	for {
-		if err := m.handleTick(ctx); err != nil {
-			log.Printf("Modbus ingest tick failed: %v", err)
-		}
-
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return
 		case <-ticker.C:
+			if err := m.handleSourceTick(ctx, source); err != nil && !isContextCanceled(err) {
+				log.Printf("Source=%s tick failed: %v", source.definition.Name, err)
+			}
 		}
 	}
 }
 
-// description: Executes one ingest cycle: read Modbus registers, normalize, validate, encode, and fan-out.
-// input: ctx (used to abort processing when canceled).
-// output: Returns error for Modbus/read/validation/encoding failures, nil on successful dispatch.
-func (m *ModbusLoop) handleTick(ctx context.Context) error {
-	// Context check for graceful shutdown
+func (m *ModbusLoop) handleSourceTick(ctx context.Context, source *sourceRunner) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
 
-	// Read the holding register and store values
-	results, err := m.client.ReadHoldingRegisters(m.mwBase, 6)
+	record, err := source.nextRecord()
 	if err != nil {
 		return err
 	}
 
-	// Normalize data to a generic form then validate that form against our rule file
-	if err := m.dataNormalizer(results); err != nil {
+	// Validate against the source-specific rule file loaded at startup.
+	validation := source.validator.Validate(record)
+	if !validation.Valid {
+		return fmt.Errorf("validation failed: %v", validation.Errors)
+	}
+
+	record, err = applyAnomalies(record, validation.Anomalies)
+	if err != nil {
 		return err
 	}
-	validation := m.validator.Validate(&m.sample)
-	if !validation.Valid {
-		return fmt.Errorf("Validation failed: %v", validation.Errors)
-	}
-	m.sample.Anomalies = validation.Anomalies
 
-	// Reset whatever sits in the buffer and then write the encoding of the sample to the encoder
-	m.jsonBuf.Reset()
-	if err := m.jsonEncoder.Encode(&m.sample); err != nil {
-		return fmt.Errorf("Encode sample json: %w", err)
+	payload, err := encodeRecordPayload(record)
+	if err != nil {
+		return fmt.Errorf("encode %s payload: %w", record.EventType(), err)
 	}
 
-	// Copy -> Fanout as it is overwritten we don't want a pointer to it
-	sample := m.sample
-	sample.Anomalies = append([]string(nil), m.sample.Anomalies...)
-	payload := append([]byte(nil), m.jsonBuf.Bytes()...)
-	m.fanOut(ctx, fanoutEvent{record: sample, payload: payload})
+	m.fanOut(ctx, fanoutEvent{
+		sourceName: source.definition.Name,
+		mlEnabled:  source.definition.MLEnabled,
+		record:     record,
+		payload:    payload,
+	})
 	return nil
 }
 
-// description: Converts raw Modbus register bytes into the normalized TempSample fields.
-// input: results (12-byte register payload from Modbus read).
-// output: Updates m.sample in place and returns nil, or returns error on invalid payload/type.
-func (m *ModbusLoop) dataNormalizer(results []byte) error {
-	// 2 bytes per register * 6 registers = 12 bytes.
-	if len(results) != 12 {
-		return fmt.Errorf("Invalid size: got %d bytes", len(results))
+func (s *sourceRunner) nextRecord() (RecordEvent, error) {
+	switch s.definition.Mode {
+	case "simulator":
+		return s.nextSimulatedRecord()
+	case "modbus":
+		return s.nextModbusRecord()
+	default:
+		return nil, fmt.Errorf("source %q unsupported mode %q", s.definition.Name, s.definition.Mode)
+	}
+}
+
+func (s *sourceRunner) nextSimulatedRecord() (RecordEvent, error) {
+	if s.definition.EventType != "temperature" {
+		return nil, fmt.Errorf("source %q simulator does not support event type %q", s.definition.Name, s.definition.EventType)
 	}
 
-	// Parse and then validate sensor type
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Use bounded drift plus occasional spikes so anomalies appear in local dev.
+	s.simStep++
+	drift := (s.rng.Float64() - 0.5) * 2.2
+	s.simTemp += drift
+	if s.simTemp < 60.0 {
+		s.simTemp = 60.0
+	}
+	if s.simTemp > 82.0 {
+		s.simTemp = 82.0
+	}
+	if s.simStep%24 == 0 {
+		s.simTemp = 77.5 + s.rng.Float64()*2.5
+	}
+	if s.forceFaultTicks > 0 {
+		// Force a clearly anomalous sample for a short window to exercise the full flow.
+		s.simTemp = 88.0 + s.rng.Float64()*4.0
+		s.forceFaultTicks--
+	}
+
+	fanOn := s.simTemp >= 72.0
+	heaterPower := math.Max(0, math.Min(100, (72.0-s.simTemp)*12.5))
+	if fanOn {
+		heaterPower = math.Max(0, heaterPower-15.0)
+	}
+
+	return TempSample{
+		ID:           s.simStep,
+		Timestamp:    nowUTC(),
+		SensorType:   "temperature_control_system",
+		SensorNumber: 1,
+		FanOn:        fanOn,
+		Temperature:  roundToTenth(s.simTemp),
+		HeaterPower:  roundToHundredth(heaterPower),
+	}, nil
+}
+
+// TriggerFaultInjection forces the named simulator source (or the first simulator source if empty)
+// to emit anomalous temperature readings for a short burst.
+func (m *ModbusLoop) TriggerFaultInjection(sourceName string) error {
+	for _, source := range m.sources {
+		if source.definition.Mode != "simulator" {
+			continue
+		}
+		if sourceName != "" && source.definition.Name != sourceName {
+			continue
+		}
+
+		source.mu.Lock()
+		source.forceFaultTicks = 10
+		source.mu.Unlock()
+		return nil
+	}
+
+	if sourceName == "" {
+		return fmt.Errorf("no simulator source available for fault injection")
+	}
+	return fmt.Errorf("simulator source %q not found", sourceName)
+}
+
+func (s *sourceRunner) nextModbusRecord() (RecordEvent, error) {
+	// Read the configured register block, then dispatch to a type-specific normalizer.
+	results, err := s.client.ReadHoldingRegisters(s.definition.Modbus.MWBase, s.definition.Modbus.RegisterCount)
+	if err != nil {
+		return nil, err
+	}
+
+	switch s.definition.EventType {
+	case "temperature":
+		return normalizeTemperatureRegisters(results)
+	case "valve":
+		return normalizeValveRegisters(results)
+	default:
+		return nil, fmt.Errorf("source %q unsupported event type %q", s.definition.Name, s.definition.EventType)
+	}
+}
+
+func encodeRecordPayload(record RecordEvent) ([]byte, error) {
+	payload, err := json.Marshal(record.Payload())
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), payload...), nil
+}
+
+func applyAnomalies(record RecordEvent, anomalies []string) (RecordEvent, error) {
+	switch sample := record.(type) {
+	case TempSample:
+		sample.Anomalies = append([]string(nil), anomalies...)
+		return sample, nil
+	case *TempSample:
+		if sample == nil {
+			return nil, fmt.Errorf("temperature record is nil")
+		}
+		sample.Anomalies = append([]string(nil), anomalies...)
+		return sample, nil
+	case ValveSample:
+		sample.Anomalies = append([]string(nil), anomalies...)
+		return sample, nil
+	case *ValveSample:
+		if sample == nil {
+			return nil, fmt.Errorf("valve record is nil")
+		}
+		sample.Anomalies = append([]string(nil), anomalies...)
+		return sample, nil
+	default:
+		return nil, fmt.Errorf("unsupported record type %T", record)
+	}
+}
+
+func (m *ModbusLoop) dataNormalizer(results []byte) error {
+	sample, err := normalizeTemperatureRegisters(results)
+	if err != nil {
+		return err
+	}
+	m.sample = sample
+	return nil
+}
+
+func normalizeTemperatureRegisters(results []byte) (TempSample, error) {
+	// Preserve the existing 6-register temperature layout.
+	if len(results) != 12 {
+		return TempSample{}, fmt.Errorf("invalid size: got %d bytes", len(results))
+	}
+
 	sensorCode := binary.BigEndian.Uint16(results[2:4])
 	sensorType, err := sensorTypeFromCode(sensorCode)
 	if err != nil {
-		return err
+		return TempSample{}, err
 	}
 
-	// Later change to better fit the actual dataset properly this is mainly filler till we swap to simulink to get data flowing
-	// Fill out sample data with the values read in
-	m.sample.ID = binary.BigEndian.Uint16(results[0:2])
-	m.sample.Timestamp = nowUTC()
-	m.sample.SensorType = sensorType
-	m.sample.SensorNumber = binary.BigEndian.Uint16(results[4:6])
-	m.sample.FanOn = binary.BigEndian.Uint16(results[6:8]) == 1
-	m.sample.Temperature = float64(int16(binary.BigEndian.Uint16(results[8:10]))) / 10.0
-	m.sample.HeaterPower = float64(binary.BigEndian.Uint16(results[10:12])) / 100.0
-
-	return nil
+	return TempSample{
+		ID:           binary.BigEndian.Uint16(results[0:2]),
+		Timestamp:    nowUTC(),
+		SensorType:   sensorType,
+		SensorNumber: binary.BigEndian.Uint16(results[4:6]),
+		FanOn:        binary.BigEndian.Uint16(results[6:8]) == 1,
+		Temperature:  float64(int16(binary.BigEndian.Uint16(results[8:10]))) / 10.0,
+		HeaterPower:  float64(binary.BigEndian.Uint16(results[10:12])) / 100.0,
+	}, nil
 }
 
-// description: Maps numeric sensor type codes to human-readable sensor type names.
-// input: code (raw sensor type numeric code from Modbus data).
-// output: Returns mapped sensor type string or an error for unsupported codes.
+func normalizeValveRegisters(results []byte) (ValveSample, error) {
+	// Decode the locked 5-register valve layout.
+	if len(results) != 10 {
+		return ValveSample{}, fmt.Errorf("invalid size: got %d bytes", len(results))
+	}
+
+	sensorCode := binary.BigEndian.Uint16(results[2:4])
+	sensorType, err := valveSensorTypeFromCode(sensorCode)
+	if err != nil {
+		return ValveSample{}, err
+	}
+
+	return ValveSample{
+		ID:          binary.BigEndian.Uint16(results[0:2]),
+		Timestamp:   nowUTC(),
+		SensorType:  sensorType,
+		ValveNumber: binary.BigEndian.Uint16(results[4:6]),
+		IsOpen:      binary.BigEndian.Uint16(results[6:8]) == 1,
+		FlowRate:    float64(binary.BigEndian.Uint16(results[8:10])) / 100.0,
+	}, nil
+}
+
 func sensorTypeFromCode(code uint16) (string, error) {
-	// As register values are ints we just swap on that to get the name of the system
 	switch code {
 	case 1:
 		return "temperature_control_system", nil
 	default:
-		return "", fmt.Errorf("Invalid sensor type: %d", code)
+		return "", fmt.Errorf("invalid sensor type: %d", code)
 	}
+}
+
+func valveSensorTypeFromCode(code uint16) (string, error) {
+	switch code {
+	case 2:
+		return "valve_control_system", nil
+	default:
+		return "", fmt.Errorf("invalid valve sensor type: %d", code)
+	}
+}
+
+func roundToTenth(value float64) float64 {
+	return math.Round(value*10) / 10
+}
+
+func roundToHundredth(value float64) float64 {
+	return math.Round(value*100) / 100
+}
+
+func isContextCanceled(err error) bool {
+	return err == context.Canceled || err == context.DeadlineExceeded
 }

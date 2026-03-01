@@ -38,7 +38,7 @@ func TestNormalizeMLAnomalyPayload(t *testing.T) {
 		"score":      0.97,
 	}
 
-	payload := normalizeMLAnomalyPayload(parsed, raw)
+	payload := normalizeMLAnomalyPayload("temperature", parsed, raw)
 	if payload.Schema != "ml_anomaly_v1" {
 		t.Fatalf("Schema = %q, want %q", payload.Schema, "ml_anomaly_v1")
 	}
@@ -54,6 +54,9 @@ func TestNormalizeMLAnomalyPayload(t *testing.T) {
 	if string(payload.RawResponse) != string(raw) {
 		t.Fatalf("RawResponse = %q, want %q", string(payload.RawResponse), string(raw))
 	}
+	if payload.EventType != "temperature" {
+		t.Fatalf("EventType = %q, want %q", payload.EventType, "temperature")
+	}
 }
 
 func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
@@ -62,11 +65,14 @@ func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
 		"anomaly": 1.0,
 	}
 
-	payload := normalizeMLAnomalyPayload(parsed, raw)
+	payload := normalizeMLAnomalyPayload("valve", parsed, raw)
 	if !payload.HasAnomaly {
 		t.Fatalf("HasAnomaly = false, want true")
 	}
 	if len(payload.Labels) != 1 || payload.Labels[0] != "ml_anomaly" {
 		t.Fatalf("Labels = %v, want [ml_anomaly]", payload.Labels)
+	}
+	if payload.EventType != "valve" {
+		t.Fatalf("EventType = %q, want %q", payload.EventType, "valve")
 	}
 }

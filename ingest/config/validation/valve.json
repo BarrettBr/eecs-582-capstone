@@ -1,0 +1,28 @@
+{
+  "required_fields": [
+    "id",
+    "timestamp",
+    "sensor_type",
+    "valve_number",
+    "is_open",
+    "flow_rate"
+  ],
+  "bounds": {
+    "valve_number": {
+      "min": 0.0,
+      "max": 200.0
+    },
+    "flow_rate": {
+      "min": 0.0,
+      "max": 1000.0
+    }
+  },
+  "anomaly_rules": [
+    {
+      "field": "flow_rate",
+      "op": ">",
+      "value": 500.0,
+      "label": "valve_flow_high"
+    }
+  ]
+}

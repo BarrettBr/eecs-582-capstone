@@ -13,9 +13,13 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteUsers(ctx context.Context) error
 	GetAllTempSamples(ctx context.Context) ([]TempSample, error)
+	GetAllValveSamples(ctx context.Context) ([]ValveSample, error)
 	GetTempSampleByID(ctx context.Context, id int64) (TempSample, error)
+	GetValveSampleByID(ctx context.Context, id int64) (ValveSample, error)
 	InsertTempSample(ctx context.Context, arg InsertTempSampleParams) (sql.Result, error)
 	InsertTempSampleAnomaly(ctx context.Context, arg InsertTempSampleAnomalyParams) error
+	InsertValveSample(ctx context.Context, arg InsertValveSampleParams) (sql.Result, error)
+	InsertValveSampleAnomaly(ctx context.Context, arg InsertValveSampleAnomalyParams) error
 	LookupUser(ctx context.Context, username string) (User, error)
 	LookupUserByID(ctx context.Context, id string) (User, error)
 }

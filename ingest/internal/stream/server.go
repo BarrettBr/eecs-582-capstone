@@ -175,10 +175,10 @@ func (s *Server) PublishEvent(eventType string, payload []byte, timestamp string
 }
 
 // PublishMLResult queues one ML response payload for the frontend.
-func (s *Server) PublishMLResult(payload []byte) {
+func (s *Server) PublishMLResult(eventType string, payload []byte) {
 	s.Publish(Message{
 		Kind:      "ml_result",
-		EventType: "temperature",
+		EventType: eventType,
 		Source:    "ml",
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Data:      payload,
