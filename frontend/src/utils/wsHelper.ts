@@ -77,7 +77,10 @@ export function connect(url = getDefaultStreamURL()): ManagedWebSocket {
 	return socket;
 }
 
-export function send(socket: ManagedWebSocket | null, msg: string | object): boolean {
+export function send(
+	socket: ManagedWebSocket | null,
+	msg: string | object,
+): boolean {
 	if (!socket) {
 		return false;
 	}
@@ -99,7 +102,10 @@ export function close(socket: ManagedWebSocket | null): void {
 	socket?.close();
 }
 
-export function onBatch(socket: ManagedWebSocket, handler: (batch: StreamBatch) => void): void {
+export function onBatch(
+	socket: ManagedWebSocket,
+	handler: (batch: StreamBatch) => void,
+): void {
 	socket.addEventListener("message", (event) => {
 		try {
 			const payload = JSON.parse(String(event.data)) as StreamBatch;

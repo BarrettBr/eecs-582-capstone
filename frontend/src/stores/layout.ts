@@ -1,8 +1,8 @@
 // Name: layout.ts
-// Description: This file acts as a store for the state of the layout (sidebar closed etc) 
-// Programmers: Adam Berry 
+// Description: This file acts as a store for the state of the layout (sidebar closed etc)
+// Programmers: Adam Berry
 // Creation Date: 3/1
-// Revision Dates: 
+// Revision Dates:
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
@@ -36,4 +36,3 @@ export const useLayoutStore = defineStore("layout", () => {
 		closeMobileMenu,
 	};
 });
-

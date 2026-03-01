@@ -12,7 +12,6 @@ Known Faults: I really doubt we really need a seperate about component for this
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import Card from "primevue/card";
-
 </script>
 
 <template>
@@ -24,7 +23,7 @@ import Card from "primevue/card";
 				<!-- System Status -->
 				<Card class="card">
 					<template #content>
-						<p class="text"> The about section of the page</p>
+						<p class="text">The about section of the page</p>
 					</template>
 				</Card>
 			</div>
@@ -39,7 +38,7 @@ import Card from "primevue/card";
 
 .title {
 	margin-bottom: 1.5rem;
-	color:black;
+	color: black;
 }
 
 .text {
@@ -55,7 +54,4 @@ import Card from "primevue/card";
 .card {
 	padding: 1rem;
 }
-
 </style>
-
-
