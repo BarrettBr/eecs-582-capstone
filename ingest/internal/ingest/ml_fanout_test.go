@@ -72,8 +72,18 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 	if received.Samples[0].Temperature != 72.5 {
 		t.Fatalf("received sample temperature = %v, want 72.5", received.Samples[0].Temperature)
 	}
-	if string(loop.mlLastResponse) != `{"ok":true}` {
-		t.Fatalf("mlLastResponse = %q, want %q", string(loop.mlLastResponse), `{"ok":true}`)
+	var normalized MLAnomalyPayload
+	if err := json.Unmarshal(loop.mlLastResponse, &normalized); err != nil {
+		t.Fatalf("json.Unmarshal(mlLastResponse) error = %v", err)
+	}
+	if normalized.Schema != "ml_anomaly_v1" {
+		t.Fatalf("normalized schema = %q, want %q", normalized.Schema, "ml_anomaly_v1")
+	}
+	if normalized.HasAnomaly {
+		t.Fatalf("normalized HasAnomaly = true, want false")
+	}
+	if string(normalized.RawResponse) != `{"ok":true}` {
+		t.Fatalf("normalized RawResponse = %q, want %q", string(normalized.RawResponse), `{"ok":true}`)
 	}
 }
 

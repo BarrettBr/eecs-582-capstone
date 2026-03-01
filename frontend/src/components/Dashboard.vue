@@ -15,7 +15,15 @@ Known Faults: None
 <script setup lang="ts">
 import { ref, onBeforeUnmount, onMounted } from "vue";
 import Card from "primevue/card";
-import DonutGraph from "./DonutGraph.vue";
+import {
+	close as closeSocket,
+	connect as connectSocket,
+	getDefaultStreamURL,
+	onBatch,
+	type ManagedWebSocket,
+	type StreamBatch,
+	type StreamMessage
+} from "@/utils/wsHelper";
 
 interface SystemStatus {
 	api: string;
@@ -34,24 +42,21 @@ interface TempEventData {
 	anomalies?: string[];
 }
 
-interface StreamMessage {
-	kind: string;
-	event_type?: string;
-	source: string;
-	timestamp: string;
-	data: unknown;
-}
-
-interface StreamBatch {
-	kind: string;
-	messages: StreamMessage[];
+interface MLAnomalyPayload {
+	schema: string;
+	event_type: string;
+	generated_at: string;
+	has_anomaly: boolean;
+	labels: string[];
+	score?: number;
+	raw_response: unknown;
 }
 
 const loading = ref(true);
 const recentEvents = ref<TempEventData[]>([]);
-const mlAlerts = ref<string[]>([]);
+const mlAlerts = ref<MLAnomalyPayload[]>([]);
 const streamState = ref("Connecting...");
-let socket: WebSocket | null = null;
+let socket: ManagedWebSocket | null = null;
 
 const status = ref<SystemStatus>({
 	api: "Online",
@@ -65,17 +70,6 @@ const metrics = ref({
 	lastIngest: "Waiting for stream"
 });
 
-function getStreamURL(): string {
-	const envURL = import.meta.env.VITE_INGEST_WS_URL as string | undefined;
-	if (envURL && envURL.trim() !== "") {
-		return envURL;
-	}
-
-	const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-	const host = window.location.hostname || "127.0.0.1";
-	return `${protocol}://${host}:8080/ws`;
-}
-
 function updateActiveAlerts(): void {
 	const ruleAlerts = recentEvents.value.reduce((count, event) => {
 		return count + (event.anomalies?.length ?? 0);
@@ -88,28 +82,24 @@ function pushRecentEvent(event: TempEventData): void {
 	recentEvents.value = recentEvents.value.slice(0, 8);
 	metrics.value.totalRecords += 1;
 	metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
+	console.log("Stream event received", event);
 	updateActiveAlerts();
 }
 
-function pushMLAlert(message: unknown): void {
-	mlAlerts.value.unshift(JSON.stringify(message));
+function pushMLAlert(message: MLAnomalyPayload): void {
+	mlAlerts.value.unshift(message);
 	mlAlerts.value = mlAlerts.value.slice(0, 8);
 	status.value.ml = "Receiving";
+	console.log("ML result received", message);
 	updateActiveAlerts();
 }
 
-function handleStreamMessage(raw: string): void {
-	let batch: StreamBatch;
-	try {
-		batch = JSON.parse(raw) as StreamBatch;
-	} catch (err) {
-		console.error("Failed to parse websocket payload", err);
-		return;
-	}
-
+function handleStreamMessage(batch: StreamBatch): void {
 	if (batch.kind !== "batch" || !Array.isArray(batch.messages)) {
 		return;
 	}
+
+	console.log("Websocket batch received", batch);
 
 	for (const message of batch.messages) {
 		if (message.kind === "event" && message.event_type === "temperature") {
@@ -117,26 +107,30 @@ function handleStreamMessage(raw: string): void {
 			continue;
 		}
 		if (message.kind === "ml_result") {
-			pushMLAlert(message.data);
+			pushMLAlert(message.data as MLAnomalyPayload);
 		}
 	}
 }
 
 onMounted(async () => {
-	socket = new WebSocket(getStreamURL());
+	const streamURL = getDefaultStreamURL();
+	console.log("Attempting websocket connection", streamURL);
+	socket = connectSocket(streamURL);
 
 	socket.addEventListener("open", () => {
+		console.log("Websocket connected", streamURL);
 		streamState.value = "Connected";
 		status.value.ingestion = "Streaming";
 		status.value.ml = "Listening";
 		loading.value = false;
 	});
 
-	socket.addEventListener("message", (event) => {
-		handleStreamMessage(String(event.data));
+	onBatch(socket, (batch: StreamBatch) => {
+		handleStreamMessage(batch);
 	});
 
 	socket.addEventListener("close", () => {
+		console.log("Websocket closed", streamURL);
 		streamState.value = "Disconnected";
 		status.value.ingestion = "Disconnected";
 		loading.value = false;
@@ -151,7 +145,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-	socket?.close();
+	closeSocket(socket);
 	socket = null;
 });
 </script>
@@ -175,13 +169,6 @@ onBeforeUnmount(() => {
 						<li><strong>ML Service:</strong> {{ status.ml }}</li>
 						<li><strong>Websocket:</strong> {{ streamState }}</li>
 					</ul>
-				</template>
-			</Card>
-
-			<Card class="card">
-				<template #content>
-					<Donut-Graph > 
-					</Donut-Graph > 
 				</template>
 			</Card>
 
@@ -231,11 +218,12 @@ onBeforeUnmount(() => {
 					<ul class="metrics-list">
 						<li v-if="mlAlerts.length === 0">No ML alerts yet</li>
 						<li v-for="(alert, index) in mlAlerts" :key="index">
-							{{ alert }}
+							{{ JSON.stringify(alert) }}
 						</li>
 					</ul>
 				</template>
 			</Card>
+
 		</div>
 	</div>
 </template>
