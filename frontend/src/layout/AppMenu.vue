@@ -4,6 +4,7 @@ Programmers: Adam Berry
 Creation Date: 2/25
 Revision Dates: 
 - 2026-03-01, Barrett Brown: Updated /Dashboard redirect to /dashboard to match with rest of code
+3/1 adam berry reformat style
 Preconditions: Not Relevant
 Postconditions: Not Relevant
 Error Types: Not Relevant
@@ -25,10 +26,10 @@ const allItems: MenuItem[] = [
 	{ separator: true },
 	{
 		label: "Other",
-		icon: "pi pi-comments",
+		icon: "pi pi-bars",
 		items: [
 			{
-				label: "All Requests",
+				label: "About",
 				icon: "pi pi-info-circle",
 				to: "/about",
 			},

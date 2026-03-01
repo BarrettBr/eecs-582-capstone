@@ -40,7 +40,8 @@ const layout = useLayoutStore();
 
 		<!-- Bottom: version info -->
 		<div class="sidebar-footer">
-			<span class="sidebar-version">v0.1.0</span>
+			<span class="sidebar-version">v0.2.3</span>
+			<span class="sidebar-version"><br>Favicon by Icons8</span>
 		</div>
 	</aside>
 </template>

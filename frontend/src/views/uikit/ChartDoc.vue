@@ -12,7 +12,6 @@ Known Faults: None
 
 
 <script setup>
-import { useLayout } from '@/layout/layout';
 import Chart from 'primevue/chart';
 import Fluid from 'primevue/fluid';
 import { onMounted, ref, watch } from 'vue';

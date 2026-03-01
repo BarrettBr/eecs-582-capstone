@@ -57,7 +57,7 @@ const containerClass = computed(() => ({
 	flex-direction: column;
 	flex: 1;
 	min-width: 0;
-	/* Offset the sidebar on desktop */
+	/* Offset for the sidebar on desktop */
 	margin-left: 260px;
 	transition: margin-left 0.3s ease;
 }
