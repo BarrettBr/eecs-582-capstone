@@ -272,9 +272,14 @@ func (m *ModbusLoop) deliverMLBatch(ctx context.Context, batch []fanoutEvent) er
 		if err := json.Unmarshal(trimmed, &parsed); err != nil {
 			return fmt.Errorf("ML response json parse: %w", err)
 		}
-		m.mlLastResponse = append(m.mlLastResponse[:0], trimmed...)
+		normalized := normalizeMLAnomalyPayload(parsed, trimmed)
+		normalizedBody, err := json.Marshal(normalized)
+		if err != nil {
+			return fmt.Errorf("ML normalized response encode: %w", err)
+		}
+		m.mlLastResponse = append(m.mlLastResponse[:0], normalizedBody...)
 		if m.streamer != nil {
-			m.streamer.PublishMLResult(trimmed)
+			m.streamer.PublishMLResult(normalizedBody)
 		}
 	} else {
 		m.mlLastResponse = m.mlLastResponse[:0]
