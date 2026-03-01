@@ -10,7 +10,6 @@
 //Known Faults: None
 
 import { createRouter, createWebHistory } from "vue-router";
-import HomeView from "@/views/HomeView.vue";
 import DashboardView from "@/views/DashboardView.vue";
 import AboutView from "@/views/AboutView.vue";
 import ChartDoc from "@/views/uikit/ChartDoc.vue";
@@ -26,24 +25,17 @@ const router = createRouter({
 				{
 					path: "/",
 					name: "home",
-					component: HomeView
+					component: DashboardView
 				},
 				{
 					path: "/about",
 					name: "about",
-					// Lazy load the about section since it is unlikely to be used often
-					//component: () => import("../views/AboutView.vue")
 					component: AboutView
 				},
 				{
 					path: "/dashboard",
 					name: "dashboard",
 					component: DashboardView
-				},
-				{
-					path: "/chartdoc",
-					name: "chartdoc",
-					component: ChartDoc
 				},
 			]
 		}
