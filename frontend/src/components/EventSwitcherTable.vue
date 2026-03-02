@@ -40,6 +40,10 @@ const currentData = computed(() => {
     ? props.recentEvents
     : props.mlAlerts;
 });
+
+const recentEventRows = computed(() => {
+  return props.recentEvents.slice(0, 5);
+});
 </script>
 
 <template>
@@ -61,9 +65,7 @@ const currentData = computed(() => {
       <!-- Temperature Events -->
       <DataTable
         v-if="selectedView === 'events'"
-        :value="currentData"
-        paginator
-        :rows="5"
+        :value="recentEventRows"
         stripedRows
         size="small"
       >
