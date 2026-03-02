@@ -2,13 +2,12 @@
 // Description: This file acts as a store for the state of the layout (sidebar closed etc)
 // Programmers: Barrett Brown, Adam Berry
 // Creation Date: 3/1
-// Revision Dates: 
+// Revision Dates:
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
 // Invariants: Dependencies described in /Docs/web.md
 // Known Faults: None
-
 
 import { ref } from "vue";
 import { defineStore } from "pinia";
@@ -23,7 +22,18 @@ import {
 } from "@/utils/wsHelper";
 
 export const useSystemStore = defineStore("system", () => {
-	const CHART_FLUSH_INTERVAL_MS = 250;
+	const DEFAULT_UI_FLUSH_INTERVAL_MS = 25;
+	const parsedUIFlushInterval = Number(
+		import.meta.env.VITE_STREAM_UI_FLUSH_INTERVAL_MS ??
+			DEFAULT_UI_FLUSH_INTERVAL_MS,
+	);
+	const UI_FLUSH_INTERVAL_MS =
+		Number.isFinite(parsedUIFlushInterval) && parsedUIFlushInterval > 0
+			? parsedUIFlushInterval
+			: DEFAULT_UI_FLUSH_INTERVAL_MS;
+	const LIVE_EVENT_LIMIT = 8;
+	const LIVE_ALERT_LIMIT = 8;
+	const CHART_POINT_LIMIT = 50;
 
 	interface SystemStatus {
 		api: string;
@@ -34,6 +44,7 @@ export const useSystemStore = defineStore("system", () => {
 	interface TempEventData {
 		id?: number;
 		timestamp: string;
+		timestamp_ms?: number;
 		display_time?: string;
 		display_timestamp?: string;
 		sensor_type?: string;
@@ -47,6 +58,7 @@ export const useSystemStore = defineStore("system", () => {
 	interface ValveEventData {
 		id?: number;
 		timestamp: string;
+		timestamp_ms?: number;
 		display_time?: string;
 		display_timestamp?: string;
 		sensor_type?: string;
@@ -60,6 +72,7 @@ export const useSystemStore = defineStore("system", () => {
 		schema: string;
 		event_type: string;
 		generated_at: string;
+		generated_at_ms?: number;
 		display_time?: string;
 		has_anomaly: boolean;
 		labels: string[];
@@ -69,14 +82,20 @@ export const useSystemStore = defineStore("system", () => {
 
 	const loading = ref(true);
 	const recentEvents = ref<TempEventData[]>([]);
-	const chartEvents = ref<TempEventData[]>([]); 
+	const chartEvents = ref<TempEventData[]>([]);
 	const recentValveEvents = ref<ValveEventData[]>([]);
 	const mlAlerts = ref<MLAnomalyPayload[]>([]);
 	const streamState = ref("Connecting...");
 	const faultStatus = ref("Idle");
 	let socket: ManagedWebSocket | null = null;
 	let chartBuffer: TempEventData[] = [];
-	let chartFlushTimer: ReturnType<typeof setTimeout> | null = null;
+	let pendingTempEvents: TempEventData[] = [];
+	let pendingValveEvents: ValveEventData[] = [];
+	let pendingMLAlerts: MLAnomalyPayload[] = [];
+	let pendingRecordDelta = 0;
+	let pendingLastIngestLabel = "";
+	let pendingChartDirty = false;
+	let uiFlushTimer: ReturnType<typeof setTimeout> | null = null;
 	let historicalEventBuffer: TempEventData[] = [];
 	let historicalMLAlertBuffer: MLAnomalyPayload[] = [];
 
@@ -118,25 +137,39 @@ export const useSystemStore = defineStore("system", () => {
 	// description: Converts one ISO timestamp into a short display time.
 	// input: A timestamp string from the backend stream.
 	// output: Returns a local time string for tables and charts.
-	function formatDisplayTime(timestamp: string): string {
-		return new Date(timestamp).toLocaleTimeString();
+	function formatDisplayTime(timestampMs: number): string {
+		return new Date(timestampMs).toLocaleTimeString();
 	}
 
 	// description: Converts one ISO timestamp into a fuller display string.
 	// input: A timestamp string from the backend stream.
 	// output: Returns a local date-time string for summary fields.
-	function formatDisplayTimestamp(timestamp: string): string {
-		return new Date(timestamp).toLocaleString();
+	function formatDisplayTimestamp(timestampMs: number): string {
+		return new Date(timestampMs).toLocaleString();
+	}
+
+	function resolveTimestampMs(timestamp: string, timestampMs?: number): number {
+		if (
+			typeof timestampMs === "number" &&
+			Number.isFinite(timestampMs) &&
+			timestampMs > 0
+		) {
+			return timestampMs;
+		}
+		const parsed = Date.parse(timestamp);
+		return Number.isFinite(parsed) ? parsed : Date.now();
 	}
 
 	// description: Adds cached display timestamps to a temperature event.
 	// input: One raw temperature event from the stream.
 	// output: Returns the normalized event used by the dashboard.
 	function normalizeTempEvent(event: TempEventData): TempEventData {
+		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
 		return {
 			...event,
-			display_time: formatDisplayTime(event.timestamp),
-			display_timestamp: formatDisplayTimestamp(event.timestamp),
+			timestamp_ms: timestampMs,
+			display_time: formatDisplayTime(timestampMs),
+			display_timestamp: formatDisplayTimestamp(timestampMs),
 		};
 	}
 
@@ -144,10 +177,12 @@ export const useSystemStore = defineStore("system", () => {
 	// input: One raw valve event from the stream.
 	// output: Returns the normalized valve event for display.
 	function normalizeValveEvent(event: ValveEventData): ValveEventData {
+		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
 		return {
 			...event,
-			display_time: formatDisplayTime(event.timestamp),
-			display_timestamp: formatDisplayTimestamp(event.timestamp),
+			timestamp_ms: timestampMs,
+			display_time: formatDisplayTime(timestampMs),
+			display_timestamp: formatDisplayTimestamp(timestampMs),
 		};
 	}
 
@@ -155,9 +190,14 @@ export const useSystemStore = defineStore("system", () => {
 	// input: One ML alert payload from the stream.
 	// output: Returns the normalized ML alert for UI rendering.
 	function normalizeMLAlert(message: MLAnomalyPayload): MLAnomalyPayload {
+		const generatedAtMs = resolveTimestampMs(
+			message.generated_at,
+			message.generated_at_ms,
+		);
 		return {
 			...message,
-			display_time: formatDisplayTime(message.generated_at),
+			generated_at_ms: generatedAtMs,
+			display_time: formatDisplayTime(generatedAtMs),
 		};
 	}
 
@@ -170,70 +210,42 @@ export const useSystemStore = defineStore("system", () => {
 		const temperatures = new Array<number | undefined>(count);
 
 		for (let index = 0; index < count; index += 1) {
-			const event = chartBuffer[count-1-index];
-			labels[index] = event.display_time ?? formatDisplayTime(event.timestamp);
+			const event = chartBuffer[count - 1 - index]!;
+			labels[index] =
+				event.display_time ??
+				formatDisplayTime(
+					resolveTimestampMs(event.timestamp, event.timestamp_ms),
+				);
 			temperatures[index] = event.temperature;
 		}
 
 		chartEvents.value = chartBuffer.slice();
+		const currentDataset = temperatureChartData.value.datasets[0]!;
 		temperatureChartData.value = {
 			labels,
 			datasets: [
 				{
-					...temperatureChartData.value.datasets[0],
+					label: currentDataset.label,
+					fill: currentDataset.fill,
+					borderColor: currentDataset.borderColor,
+					tension: currentDataset.tension,
 					data: temperatures,
 				},
 			],
 		};
 	}
 
-	// description: Schedules a delayed chart refresh to avoid redrawing per event.
-	// input: Uses the local flush timer state.
-	// output: Starts one 250ms timer if none is already pending.
-	function scheduleChartFlush(): void {
-		if (chartFlushTimer !== null) {
+	// description: Schedules one UI flush so multiple websocket batches merge into one render pass.
+	// input: Uses the pending timer state.
+	// output: Starts one delayed flush if none is already pending.
+	function scheduleUIFlush(): void {
+		if (uiFlushTimer !== null) {
 			return;
 		}
-		chartFlushTimer = setTimeout(() => {
-			chartFlushTimer = null;
-			flushChartUpdates();
-		}, CHART_FLUSH_INTERVAL_MS);
-	}
-
-	// description: Stores one temperature event for lists, metrics, and charts.
-	// input: One temperature event from the websocket stream.
-	// output: Updates UI state and schedules the chart refresh.
-	function pushRecentEvent(event: TempEventData): void {
-		const normalized = normalizeTempEvent(event);
-
-		historicalEventBuffer.unshift(normalized);
-
-		// Keep the live dashboard list small so UI updates stay cheap over time.
-		recentEvents.value.unshift(normalized);
-		recentEvents.value = recentEvents.value.slice(0, 8);
-
-		// Keep the latest chart samples buffered and flush chart updates on a timer.
-		chartBuffer.unshift(normalized);
-		chartBuffer = chartBuffer.slice(0, 50);
-		scheduleChartFlush();
-
-		metrics.value.totalRecords += 1;
-		metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
-		//console.log("Stream event received", event);
-		updateActiveAlerts();
-	}
-
-	// description: Stores one ML alert for the dashboard.
-	// input: One normalized ML payload from the websocket stream.
-	// output: Adds the alert to the list and refreshes metrics.
-	function pushMLAlert(message: MLAnomalyPayload): void {
-		const normalized = normalizeMLAlert(message);
-		historicalMLAlertBuffer.unshift(normalized);
-		mlAlerts.value.unshift(normalized);
-		mlAlerts.value = mlAlerts.value.slice(0, 8);
-		status.value.ml = "Receiving";
-		//console.log("ML result received", message);
-		updateActiveAlerts();
+		uiFlushTimer = setTimeout(() => {
+			uiFlushTimer = null;
+			flushPendingUIUpdates();
+		}, UI_FLUSH_INTERVAL_MS);
 	}
 
 	// description: Returns a frozen copy of the full temperature event history.
@@ -250,17 +262,89 @@ export const useSystemStore = defineStore("system", () => {
 		return historicalMLAlertBuffer.slice();
 	}
 
-	// description: Stores one valve event for the valve list and summary metrics.
-	// input: One valve event from the websocket stream.
-	// output: Adds the event to state and updates the metrics block.
-	function pushValveEvent(event: ValveEventData): void {
-		const normalized = normalizeValveEvent(event);
-		recentValveEvents.value.unshift(normalized);
-		recentValveEvents.value = recentValveEvents.value.slice(0, 8);
-		metrics.value.totalRecords += 1;
-		metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
-		//console.log("Valve stream event received", event);
-		updateActiveAlerts();
+	function prependNewestFirst<T>(
+		current: T[],
+		incoming: T[],
+		limit: number,
+	): T[] {
+		if (incoming.length === 0) {
+			return current;
+		}
+		const newestFirst = incoming.slice().reverse();
+		return newestFirst.concat(current).slice(0, limit);
+	}
+
+	// description: Applies the pending non-reactive batch delta to reactive UI state in one pass.
+	// input: Reads the pending batch buffers and counters.
+	// output: Updates the dashboard refs once per flush interval.
+	function flushPendingUIUpdates(): void {
+		const hasTempEvents = pendingTempEvents.length > 0;
+		const hasValveEvents = pendingValveEvents.length > 0;
+		const hasMLAlerts = pendingMLAlerts.length > 0;
+		if (
+			!hasTempEvents &&
+			!hasValveEvents &&
+			!hasMLAlerts &&
+			pendingRecordDelta === 0
+		) {
+			return;
+		}
+
+		if (hasTempEvents) {
+			for (let index = pendingTempEvents.length - 1; index >= 0; index -= 1) {
+				historicalEventBuffer.unshift(pendingTempEvents[index]!);
+			}
+			recentEvents.value = prependNewestFirst(
+				recentEvents.value,
+				pendingTempEvents,
+				LIVE_EVENT_LIMIT,
+			);
+			chartBuffer = prependNewestFirst(
+				chartBuffer,
+				pendingTempEvents,
+				CHART_POINT_LIMIT,
+			);
+		}
+
+		if (hasValveEvents) {
+			recentValveEvents.value = prependNewestFirst(
+				recentValveEvents.value,
+				pendingValveEvents,
+				LIVE_EVENT_LIMIT,
+			);
+		}
+
+		if (hasMLAlerts) {
+			for (let index = pendingMLAlerts.length - 1; index >= 0; index -= 1) {
+				historicalMLAlertBuffer.unshift(pendingMLAlerts[index]!);
+			}
+			mlAlerts.value = prependNewestFirst(
+				mlAlerts.value,
+				pendingMLAlerts,
+				LIVE_ALERT_LIMIT,
+			);
+			status.value.ml = "Receiving";
+		}
+
+		if (pendingRecordDelta > 0) {
+			metrics.value.totalRecords += pendingRecordDelta;
+		}
+		if (pendingLastIngestLabel !== "") {
+			metrics.value.lastIngest = pendingLastIngestLabel;
+		}
+		if (pendingChartDirty) {
+			flushChartUpdates();
+		}
+		if (hasTempEvents || hasValveEvents || hasMLAlerts) {
+			updateActiveAlerts();
+		}
+
+		pendingTempEvents = [];
+		pendingValveEvents = [];
+		pendingMLAlerts = [];
+		pendingRecordDelta = 0;
+		pendingLastIngestLabel = "";
+		pendingChartDirty = false;
 	}
 
 	// description: Sends a request that forces the simulator into a fault burst.
@@ -287,22 +371,52 @@ export const useSystemStore = defineStore("system", () => {
 		}
 
 		//console.log("Websocket batch received", batch);
+		let batchRecordDelta = 0;
+		let lastIngestMs = 0;
+		let lastIngestLabel = "";
 
 		for (const message of batch.messages) {
 			if (message.kind === "event") {
 				if (message.event_type === "temperature") {
-					pushRecentEvent(message.data as TempEventData);
+					const normalized = normalizeTempEvent(message.data as TempEventData);
+					pendingTempEvents.push(normalized);
+					batchRecordDelta += 1;
+					pendingChartDirty = true;
+					if ((normalized.timestamp_ms ?? 0) >= lastIngestMs) {
+						lastIngestMs = normalized.timestamp_ms ?? lastIngestMs;
+						lastIngestLabel =
+							normalized.display_timestamp ??
+							formatDisplayTimestamp(lastIngestMs);
+					}
 					continue;
 				}
 				if (message.event_type === "valve") {
-					pushValveEvent(message.data as ValveEventData);
+					const normalized = normalizeValveEvent(
+						message.data as ValveEventData,
+					);
+					pendingValveEvents.push(normalized);
+					batchRecordDelta += 1;
+					if ((normalized.timestamp_ms ?? 0) >= lastIngestMs) {
+						lastIngestMs = normalized.timestamp_ms ?? lastIngestMs;
+						lastIngestLabel =
+							normalized.display_timestamp ??
+							formatDisplayTimestamp(lastIngestMs);
+					}
 				}
 				continue;
 			}
 			if (message.kind === "ml_result") {
-				pushMLAlert(message.data as MLAnomalyPayload);
+				pendingMLAlerts.push(
+					normalizeMLAlert(message.data as MLAnomalyPayload),
+				);
 			}
 		}
+
+		pendingRecordDelta += batchRecordDelta;
+		if (lastIngestLabel !== "") {
+			pendingLastIngestLabel = lastIngestLabel;
+		}
+		scheduleUIFlush();
 	}
 
 	// description: Opens the live websocket stream and attaches listeners.
@@ -338,14 +452,14 @@ export const useSystemStore = defineStore("system", () => {
 		});
 
 		socket.addEventListener("error", (err) => {
-				console.error("Websocket stream error", err);
+			console.error("Websocket stream error", err);
 
-				streamState.value = "Error";
-				status.value.ingestion = "Stream Error";
-				status.value.ml = "Offline";
-				status.value.api = "Offline";
+			streamState.value = "Error";
+			status.value.ingestion = "Stream Error";
+			status.value.ml = "Offline";
+			status.value.api = "Offline";
 
-				loading.value = false;
+			loading.value = false;
 		});
 	}
 
@@ -353,15 +467,14 @@ export const useSystemStore = defineStore("system", () => {
 	// input: No arguments; uses the current socket and timer state.
 	// output: Closes the stream connection and resets local handles.
 	function stopStream() {
+		flushPendingUIUpdates();
 		closeSocket(socket);
 		socket = null;
-		if (chartFlushTimer !== null) {
-			clearTimeout(chartFlushTimer);
-			chartFlushTimer = null;
+		if (uiFlushTimer !== null) {
+			clearTimeout(uiFlushTimer);
+			uiFlushTimer = null;
 		}
 	}
-
-
 
 	// Must return everything that is used in components
 	return {
@@ -379,6 +492,6 @@ export const useSystemStore = defineStore("system", () => {
 		getHistoricalEventSnapshot,
 		getHistoricalMLAlertSnapshot,
 		temperatureChartData,
-		chartEvents, 
+		chartEvents,
 	};
 });

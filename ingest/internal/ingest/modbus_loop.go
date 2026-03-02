@@ -392,9 +392,12 @@ func normalizeTemperatureRegisters(results []byte) (TempSample, error) {
 		return TempSample{}, err
 	}
 
+	now := time.Now().UTC()
+
 	return TempSample{
 		ID:           binary.BigEndian.Uint16(results[0:2]),
-		Timestamp:    nowUTC(),
+		Timestamp:    now.Format(time.RFC3339Nano),
+		TimestampMs:  now.UnixMilli(),
 		SensorType:   sensorType,
 		SensorNumber: binary.BigEndian.Uint16(results[4:6]),
 		FanOn:        binary.BigEndian.Uint16(results[6:8]) == 1,
@@ -415,9 +418,12 @@ func normalizeValveRegisters(results []byte) (ValveSample, error) {
 		return ValveSample{}, err
 	}
 
+	now := time.Now().UTC()
+
 	return ValveSample{
 		ID:          binary.BigEndian.Uint16(results[0:2]),
-		Timestamp:   nowUTC(),
+		Timestamp:   now.Format(time.RFC3339Nano),
+		TimestampMs: now.UnixMilli(),
 		SensorType:  sensorType,
 		ValveNumber: binary.BigEndian.Uint16(results[4:6]),
 		IsOpen:      binary.BigEndian.Uint16(results[6:8]) == 1,

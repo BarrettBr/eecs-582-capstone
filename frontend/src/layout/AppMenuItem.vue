@@ -15,7 +15,7 @@ import { useRoute, RouterLink } from "vue-router";
 import { useLayoutStore } from "@/stores/layout";
 
 export interface MenuItem {
-	label: string;
+	label?: string;
 	icon?: string;
 	to?: string;
 	items?: MenuItem[];

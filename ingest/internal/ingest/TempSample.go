@@ -40,6 +40,7 @@ import "time"
 type TempSample struct {
 	ID           uint16   `json:"id"`
 	Timestamp    string   `json:"timestamp"`
+	TimestampMs  int64    `json:"timestamp_ms"`
 	SensorType   string   `json:"sensor_type"`
 	SensorNumber uint16   `json:"sensor_number"`
 	FanOn        bool     `json:"fan_on"`
@@ -53,6 +54,7 @@ func (s TempSample) ToRecord() map[string]any {
 	return map[string]any{
 		"id":            s.ID,
 		"timestamp":     s.Timestamp,
+		"timestamp_ms":  s.TimestampMs,
 		"sensor_type":   s.SensorType,
 		"sensor_number": s.SensorNumber,
 		"fan_on":        s.FanOn,

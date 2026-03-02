@@ -3,6 +3,7 @@ package ingest
 type ValveSample struct {
 	ID          uint16   `json:"id"`
 	Timestamp   string   `json:"timestamp"`
+	TimestampMs int64    `json:"timestamp_ms"`
 	SensorType  string   `json:"sensor_type"`
 	ValveNumber uint16   `json:"valve_number"`
 	IsOpen      bool     `json:"is_open"`
@@ -14,6 +15,7 @@ func (s ValveSample) ToRecord() map[string]any {
 	return map[string]any{
 		"id":           s.ID,
 		"timestamp":    s.Timestamp,
+		"timestamp_ms": s.TimestampMs,
 		"sensor_type":  s.SensorType,
 		"valve_number": s.ValveNumber,
 		"is_open":      s.IsOpen,

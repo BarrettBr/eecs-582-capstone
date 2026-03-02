@@ -9,7 +9,7 @@
       "sql_target": "temp_samples",
       "ml_enabled": true,
       "simulator": {
-        "interval": "100ms",
+        "interval": "150ms",
         "seed": 42,
         "profile": "temperature_default"
       }

@@ -36,22 +36,26 @@ import (
 
 // MLAnomalyPayload is the stable payload shape sent to the frontend for ML results.
 type MLAnomalyPayload struct {
-	Schema      string          `json:"schema"`
-	EventType   string          `json:"event_type"`
-	GeneratedAt string          `json:"generated_at"`
-	HasAnomaly  bool            `json:"has_anomaly"`
-	Labels      []string        `json:"labels"`
-	Score       *float64        `json:"score,omitempty"`
-	RawResponse json.RawMessage `json:"raw_response"`
+	Schema        string          `json:"schema"`
+	EventType     string          `json:"event_type"`
+	GeneratedAt   string          `json:"generated_at"`
+	GeneratedAtMs int64           `json:"generated_at_ms"`
+	HasAnomaly    bool            `json:"has_anomaly"`
+	Labels        []string        `json:"labels"`
+	Score         *float64        `json:"score,omitempty"`
+	RawResponse   json.RawMessage `json:"raw_response"`
 }
 
 func normalizeMLAnomalyPayload(eventType string, parsed any, raw []byte) MLAnomalyPayload {
+	now := time.Now().UTC()
+
 	payload := MLAnomalyPayload{
-		Schema:      "ml_anomaly_v1",
-		EventType:   eventType,
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		Labels:      make([]string, 0),
-		RawResponse: append([]byte(nil), raw...),
+		Schema:        "ml_anomaly_v1",
+		EventType:     eventType,
+		GeneratedAt:   now.Format(time.RFC3339Nano),
+		GeneratedAtMs: now.UnixMilli(),
+		Labels:        make([]string, 0),
+		RawResponse:   append([]byte(nil), raw...),
 	}
 
 	score := extractScore(parsed)
