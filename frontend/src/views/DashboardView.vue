@@ -154,7 +154,7 @@ const chartOptions = ref({
 						<ul class="metrics-list">
 							<li v-if="recentValveEvents.length === 0">No valve events yet</li>
 							<li v-for="event in recentValveEvents" :key="event.timestamp">
-								{{ new Date(event.timestamp).toLocaleTimeString() }}
+								{{ event.display_time ?? event.timestamp }}
 								flow {{ event.flow_rate ?? "n/a" }}
 								<span v-if="event.anomalies && event.anomalies.length > 0">
 									alerts {{ event.anomalies.join(", ") }}
