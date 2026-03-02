@@ -8,6 +8,7 @@ import Card from "primevue/card";
 
 interface TempEvent {
   timestamp: string;
+  display_time?: string;
   sensor_number?: number;
   temperature?: number;
   fan_on?: boolean;
@@ -16,6 +17,7 @@ interface TempEvent {
 
 interface MLAlert {
   generated_at: string;
+  display_time?: string;
   has_anomaly: boolean;
   labels: string[];
   score?: number;
@@ -67,7 +69,7 @@ const currentData = computed(() => {
       >
         <Column field="timestamp" header="Time" sortable>
           <template #body="{ data }">
-            {{ new Date(data.timestamp).toLocaleTimeString() }}
+            {{ data.display_time ?? data.timestamp }}
           </template>
         </Column>
 
@@ -111,7 +113,7 @@ const currentData = computed(() => {
       >
         <Column field="generated_at" header="Generated" sortable>
           <template #body="{ data }">
-            {{ new Date(data.generated_at).toLocaleTimeString() }}
+            {{ data.display_time ?? data.generated_at }}
           </template>
         </Column>
 

@@ -10,7 +10,7 @@
 // Known Faults: None
 
 
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { defineStore } from "pinia";
 import {
 	close as closeSocket,
@@ -23,6 +23,8 @@ import {
 } from "@/utils/wsHelper";
 
 export const useSystemStore = defineStore("system", () => {
+	const CHART_FLUSH_INTERVAL_MS = 250;
+
 	interface SystemStatus {
 		api: string;
 		ingestion: string;
@@ -32,6 +34,8 @@ export const useSystemStore = defineStore("system", () => {
 	interface TempEventData {
 		id?: number;
 		timestamp: string;
+		display_time?: string;
+		display_timestamp?: string;
 		sensor_type?: string;
 		sensor_number?: number;
 		fan_on?: boolean;
@@ -43,6 +47,8 @@ export const useSystemStore = defineStore("system", () => {
 	interface ValveEventData {
 		id?: number;
 		timestamp: string;
+		display_time?: string;
+		display_timestamp?: string;
 		sensor_type?: string;
 		valve_number?: number;
 		is_open?: boolean;
@@ -54,6 +60,7 @@ export const useSystemStore = defineStore("system", () => {
 		schema: string;
 		event_type: string;
 		generated_at: string;
+		display_time?: string;
 		has_anomaly: boolean;
 		labels: string[];
 		score?: number;
@@ -68,6 +75,8 @@ export const useSystemStore = defineStore("system", () => {
 	const streamState = ref("Connecting...");
 	const faultStatus = ref("Idle");
 	let socket: ManagedWebSocket | null = null;
+	let chartBuffer: TempEventData[] = [];
+	let chartFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const status = ref<SystemStatus>({
 		api: "Online",
@@ -81,6 +90,19 @@ export const useSystemStore = defineStore("system", () => {
 		lastIngest: "Waiting for stream",
 	});
 
+	const temperatureChartData = ref({
+		labels: [] as string[],
+		datasets: [
+			{
+				label: "Temperature",
+				data: [] as Array<number | undefined>,
+				fill: false,
+				borderColor: "#10b981",
+				tension: 0.4,
+			},
+		],
+	});
+
 	function updateActiveAlerts(): void {
 		const ruleAlerts = recentEvents.value.reduce((count, event) => {
 			return count + (event.anomalies?.length ?? 0);
@@ -88,23 +110,91 @@ export const useSystemStore = defineStore("system", () => {
 		metrics.value.activeAlerts = ruleAlerts + mlAlerts.value.length;
 	}
 
+	function formatDisplayTime(timestamp: string): string {
+		return new Date(timestamp).toLocaleTimeString();
+	}
+
+	function formatDisplayTimestamp(timestamp: string): string {
+		return new Date(timestamp).toLocaleString();
+	}
+
+	function normalizeTempEvent(event: TempEventData): TempEventData {
+		return {
+			...event,
+			display_time: formatDisplayTime(event.timestamp),
+			display_timestamp: formatDisplayTimestamp(event.timestamp),
+		};
+	}
+
+	function normalizeValveEvent(event: ValveEventData): ValveEventData {
+		return {
+			...event,
+			display_time: formatDisplayTime(event.timestamp),
+			display_timestamp: formatDisplayTimestamp(event.timestamp),
+		};
+	}
+
+	function normalizeMLAlert(message: MLAnomalyPayload): MLAnomalyPayload {
+		return {
+			...message,
+			display_time: formatDisplayTime(message.generated_at),
+		};
+	}
+
+	function flushChartUpdates(): void {
+		const count = chartBuffer.length;
+		const labels = new Array<string>(count);
+		const temperatures = new Array<number | undefined>(count);
+
+		for (let index = 0; index < count; index += 1) {
+			const event = chartBuffer[count-1-index];
+			labels[index] = event.display_time ?? formatDisplayTime(event.timestamp);
+			temperatures[index] = event.temperature;
+		}
+
+		chartEvents.value = chartBuffer.slice();
+		temperatureChartData.value = {
+			labels,
+			datasets: [
+				{
+					...temperatureChartData.value.datasets[0],
+					data: temperatures,
+				},
+			],
+		};
+	}
+
+	function scheduleChartFlush(): void {
+		if (chartFlushTimer !== null) {
+			return;
+		}
+		chartFlushTimer = setTimeout(() => {
+			chartFlushTimer = null;
+			flushChartUpdates();
+		}, CHART_FLUSH_INTERVAL_MS);
+	}
+
 	function pushRecentEvent(event: TempEventData): void {
+		const normalized = normalizeTempEvent(event);
+
         // Strictly keep 8 for the dashboard list
-        recentEvents.value.unshift(event);
+        recentEvents.value.unshift(normalized);
         // recentEvents.value = recentEvents.value.slice(0, 8);
 
-        // Kepe as many as needed for the live chart
-        chartEvents.value.unshift(event);
-        chartEvents.value = chartEvents.value.slice(0, 50);
+        // Keep the latest chart samples buffered and flush chart updates on a timer.
+        chartBuffer.unshift(normalized);
+        chartBuffer = chartBuffer.slice(0, 50);
+        scheduleChartFlush();
 
         metrics.value.totalRecords += 1;
-        metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
+        metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
         //console.log("Stream event received", event);
         updateActiveAlerts();
     }
 
 	function pushMLAlert(message: MLAnomalyPayload): void {
-		mlAlerts.value.unshift(message);
+		const normalized = normalizeMLAlert(message);
+		mlAlerts.value.unshift(normalized);
 		mlAlerts.value = mlAlerts.value.slice(0, 8);
 		status.value.ml = "Receiving";
 		//console.log("ML result received", message);
@@ -112,10 +202,11 @@ export const useSystemStore = defineStore("system", () => {
 	}
 
 	function pushValveEvent(event: ValveEventData): void {
-		recentValveEvents.value.unshift(event);
+		const normalized = normalizeValveEvent(event);
+		recentValveEvents.value.unshift(normalized);
 		recentValveEvents.value = recentValveEvents.value.slice(0, 8);
 		metrics.value.totalRecords += 1;
-		metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
+		metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
 		//console.log("Valve stream event received", event);
 		updateActiveAlerts();
 	}
@@ -193,24 +284,11 @@ export const useSystemStore = defineStore("system", () => {
 	function stopStream() {
 		closeSocket(socket);
 		socket = null;
+		if (chartFlushTimer !== null) {
+			clearTimeout(chartFlushTimer);
+			chartFlushTimer = null;
+		}
 	}
-
-	const temperatureChartData = computed(() => {
-		return {
-			// .reverse() is used here because unshift() puts the newest items at index 0, 
-			// but charts usually read left-to-right (oldest to newest)
-			labels: chartEvents.value.map(e => new Date(e.timestamp).toLocaleTimeString()).reverse(),
-				datasets: [
-				{
-					label: 'Temperature',
-					data: chartEvents.value.map(e => e.temperature).reverse(),
-						fill: false,
-					borderColor: '#10b981',
-					tension: 0.4
-				}
-			]
-		};
-	});
 
 
 

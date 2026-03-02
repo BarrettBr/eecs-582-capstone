@@ -217,6 +217,9 @@ func (m *ModbusLoop) deliverMLTypeBatch(ctx context.Context, eventType string, s
 		return fmt.Errorf("ML normalized response encode (%s): %w", eventType, err)
 	}
 	m.mlLastResponse = append(m.mlLastResponse[:0], normalizedBody...)
+	if !normalized.HasAnomaly {
+		return nil
+	}
 	if m.streamer != nil {
 		m.streamer.PublishMLResult(eventType, normalizedBody)
 	}
