@@ -1,5 +1,16 @@
-// src/stores/system.ts
-import { ref, computed } from "vue"; // Removed lifecycle hooks
+// Name: stores/system.ts
+// Description: This file acts as a store for the state of the layout (sidebar closed etc)
+// Programmers: Barrett Brown, Adam Berry
+// Creation Date: 3/1
+// Revision Dates: 
+// Preconditions: None
+// Postconditions: Not Relevant
+// Error Types: Not Relevant
+// Invariants: Dependencies described in /Docs/web.md
+// Known Faults: None
+
+
+import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import {
 	close as closeSocket,
@@ -9,7 +20,6 @@ import {
 	send as sendSocket,
 	type ManagedWebSocket,
 	type StreamBatch,
-	type StreamMessage,
 } from "@/utils/wsHelper";
 
 export const useSystemStore = defineStore("system", () => {
@@ -52,6 +62,7 @@ export const useSystemStore = defineStore("system", () => {
 
 	const loading = ref(true);
 	const recentEvents = ref<TempEventData[]>([]);
+	const chartEvents = ref<TempEventData[]>([]); 
 	const recentValveEvents = ref<ValveEventData[]>([]);
 	const mlAlerts = ref<MLAnomalyPayload[]>([]);
 	const streamState = ref("Connecting...");
@@ -78,13 +89,19 @@ export const useSystemStore = defineStore("system", () => {
 	}
 
 	function pushRecentEvent(event: TempEventData): void {
-		recentEvents.value.unshift(event);
-		recentEvents.value = recentEvents.value.slice(0, 8);
-		metrics.value.totalRecords += 1;
-		metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
-		console.log("Stream event received", event);
-		updateActiveAlerts();
-	}
+        // Strictly keep 8 for the dashboard list
+        recentEvents.value.unshift(event);
+        recentEvents.value = recentEvents.value.slice(0, 8);
+
+        // Kepe as many as needed for the live chart
+        chartEvents.value.unshift(event);
+        chartEvents.value = chartEvents.value.slice(0, 50);
+
+        metrics.value.totalRecords += 1;
+        metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
+        console.log("Stream event received", event);
+        updateActiveAlerts();
+    }
 
 	function pushMLAlert(message: MLAnomalyPayload): void {
 		mlAlerts.value.unshift(message);
@@ -139,7 +156,6 @@ export const useSystemStore = defineStore("system", () => {
 		}
 	}
 
-	// CHANGED: Wrapped in a function instead of onMounted
 	async function startStream() {
 		if (socket) return; // Prevent duplicate connections
 
@@ -174,29 +190,29 @@ export const useSystemStore = defineStore("system", () => {
 		});
 	}
 
-	// CHANGED: Wrapped in a function instead of onBeforeUnmount
 	function stopStream() {
 		closeSocket(socket);
 		socket = null;
 	}
 
-	// CHANGED: Added computed property for the charts
 	const temperatureChartData = computed(() => {
 		return {
-			labels: recentEvents.value
-				.map((e) => new Date(e.timestamp).toLocaleTimeString())
-				.reverse(),
-			datasets: [
+			// .reverse() is used here because unshift() puts the newest items at index 0, 
+			// but charts usually read left-to-right (oldest to newest)
+			labels: chartEvents.value.map(e => new Date(e.timestamp).toLocaleTimeString()).reverse(),
+				datasets: [
 				{
-					label: "Temperature",
-					data: recentEvents.value.map((e) => e.temperature).reverse(),
-					fill: false,
-					borderColor: "#10b981",
-					tension: 0.4,
-				},
-			],
+					label: 'Temperature',
+					data: chartEvents.value.map(e => e.temperature).reverse(),
+						fill: false,
+					borderColor: '#10b981',
+					tension: 0.4
+				}
+			]
 		};
 	});
+
+
 
 	// Must return everything that is used in components
 	return {
@@ -212,5 +228,6 @@ export const useSystemStore = defineStore("system", () => {
 		startStream,
 		stopStream,
 		temperatureChartData,
+		chartEvents, 
 	};
 });
