@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BarrettBr/eecs-582-capstone/internal/config"
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
 	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
 	"github.com/goburrow/modbus"
@@ -40,8 +41,14 @@ type ModbusLoop struct {
 	sqlNormalSampleCount  map[string]int
 }
 
+type Dependencies struct {
+	DB       *sql.DB
+	Queries  *database.Queries
+	Streamer *stream.Server
+}
+
 type sourceRunner struct {
-	definition      SourceDefinition
+	definition      config.SourceDefinition
 	validator       *RuleEngine
 	interval        time.Duration
 	client          modbus.Client
@@ -52,65 +59,53 @@ type sourceRunner struct {
 	forceFaultTicks int
 }
 
-type MLFanoutConfig struct {
-	APIURL             string
-	HTTPTimeout        time.Duration
-	BatchSize          int
-	BatchFlushInterval time.Duration
-	DropOnOverload     bool
+type LoopConfig struct {
+	PollInterval time.Duration
+	Sources      []config.SourceDefinition
+	MLFanout     config.MLFanoutConfig
+	SQLFanout    config.SQLFanoutConfig
 }
 
-type SQLFanoutConfig struct {
-	BatchSize          int
-	BatchFlushInterval time.Duration
-	NormalSampleRate   int
-}
-
-// NewModbusLoop now builds the generalized ingest runtime from a source catalog.
-func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration, sourceConfigPath string, mlCfg MLFanoutConfig, sqlCfg SQLFanoutConfig, wsServer *stream.Server) *ModbusLoop {
-	if interval <= 0 {
-		interval = 5 * time.Second
+// NewModbusLoop builds the generalized ingest runtime from validated source definitions.
+func NewModbusLoop(deps Dependencies, cfg LoopConfig) (*ModbusLoop, error) {
+	if cfg.PollInterval <= 0 {
+		cfg.PollInterval = 5 * time.Second
 	}
-	if sqlCfg.BatchSize <= 0 {
-		sqlCfg.BatchSize = 1
+	if cfg.SQLFanout.BatchSize <= 0 {
+		cfg.SQLFanout.BatchSize = 1
 	}
-	if sqlCfg.BatchFlushInterval <= 0 {
-		sqlCfg.BatchFlushInterval = 25 * time.Millisecond
+	if cfg.SQLFanout.BatchFlushInterval <= 0 {
+		cfg.SQLFanout.BatchFlushInterval = 25 * time.Millisecond
 	}
-	if sqlCfg.NormalSampleRate <= 0 {
-		sqlCfg.NormalSampleRate = 1
+	if cfg.SQLFanout.NormalSampleRate <= 0 {
+		cfg.SQLFanout.NormalSampleRate = 1
 	}
-	if mlCfg.BatchSize <= 0 {
-		mlCfg.BatchSize = 1
+	if cfg.MLFanout.BatchSize <= 0 {
+		cfg.MLFanout.BatchSize = 1
 	}
-	if mlCfg.BatchFlushInterval <= 0 {
-		mlCfg.BatchFlushInterval = 25 * time.Millisecond
+	if cfg.MLFanout.BatchFlushInterval <= 0 {
+		cfg.MLFanout.BatchFlushInterval = 25 * time.Millisecond
 	}
-	if mlCfg.HTTPTimeout <= 0 {
-		mlCfg.HTTPTimeout = 500 * time.Millisecond
+	if cfg.MLFanout.HTTPTimeout <= 0 {
+		cfg.MLFanout.HTTPTimeout = 500 * time.Millisecond
 	}
 
-	catalog, err := LoadSourceCatalog(sourceConfigPath)
+	sources, err := buildSourceRunners(cfg.Sources, cfg.PollInterval)
 	if err != nil {
-		log.Fatalf("Source config load failed (%s): %v", sourceConfigPath, err)
-	}
-
-	sources, err := buildSourceRunners(catalog, interval)
-	if err != nil {
-		log.Fatalf("Source initialization failed: %v", err)
+		return nil, err
 	}
 
 	return &ModbusLoop{
-		db:       db,
-		queries:  queries,
-		interval: interval,
+		db:       deps.DB,
+		queries:  deps.Queries,
+		interval: cfg.PollInterval,
 		sources:  sources,
 		mlCh:     make(chan fanoutEvent, 128),
 		sqlCh:    make(chan fanoutEvent, 128),
 		wsCh:     make(chan fanoutEvent, 128),
-		mlAPIURL: mlCfg.APIURL,
+		mlAPIURL: cfg.MLFanout.APIURL,
 		mlHTTP: &http.Client{
-			Timeout: mlCfg.HTTPTimeout,
+			Timeout: cfg.MLFanout.HTTPTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 100,
@@ -118,20 +113,20 @@ func NewModbusLoop(db *sql.DB, queries *database.Queries, interval time.Duration
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		mlBatchSize:           mlCfg.BatchSize,
-		mlBatchFlushInterval:  mlCfg.BatchFlushInterval,
-		mlDropOnOverload:      mlCfg.DropOnOverload,
-		streamer:              wsServer,
-		sqlBatchSize:          sqlCfg.BatchSize,
-		sqlBatchFlushInterval: sqlCfg.BatchFlushInterval,
-		sqlNormalSampleRate:   sqlCfg.NormalSampleRate,
+		mlBatchSize:           cfg.MLFanout.BatchSize,
+		mlBatchFlushInterval:  cfg.MLFanout.BatchFlushInterval,
+		mlDropOnOverload:      cfg.MLFanout.DropOnOverload,
+		streamer:              deps.Streamer,
+		sqlBatchSize:          cfg.SQLFanout.BatchSize,
+		sqlBatchFlushInterval: cfg.SQLFanout.BatchFlushInterval,
+		sqlNormalSampleRate:   cfg.SQLFanout.NormalSampleRate,
 		sqlNormalSampleCount:  make(map[string]int),
-	}
+	}, nil
 }
 
-func buildSourceRunners(catalog *SourceCatalog, defaultModbusInterval time.Duration) ([]*sourceRunner, error) {
-	sources := make([]*sourceRunner, 0, len(catalog.Sources))
-	for _, definition := range catalog.Sources {
+func buildSourceRunners(definitions []config.SourceDefinition, defaultModbusInterval time.Duration) ([]*sourceRunner, error) {
+	sources := make([]*sourceRunner, 0, len(definitions))
+	for _, definition := range definitions {
 		validator, err := NewRuleEngine(definition.ValidationFile)
 		if err != nil {
 			return nil, fmt.Errorf("load validator for %q: %w", definition.Name, err)

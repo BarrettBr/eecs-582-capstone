@@ -85,6 +85,7 @@ type Server struct {
 	batchSize          int
 	batchFlushInterval time.Duration
 	httpServer         *http.Server
+	mux                *http.ServeMux
 	publishCh          chan Message
 	registerCh         chan *client
 	unregisterCh       chan *client
@@ -130,6 +131,7 @@ func NewServer(cfg Config) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(s.path, s.handleWebsocket)
+	s.mux = mux
 	s.httpServer = &http.Server{
 		Addr:    s.addr,
 		Handler: mux,
@@ -194,6 +196,14 @@ func (s *Server) RegisterReadHandler(kind string, handler ReadHandler) {
 	s.readHandlerMu.Lock()
 	defer s.readHandlerMu.Unlock()
 	s.readHandlers[kind] = handler
+}
+
+// RegisterHTTPHandler adds or replaces one plain HTTP handler on the shared server mux.
+func (s *Server) RegisterHTTPHandler(path string, handler http.HandlerFunc) {
+	if path == "" || handler == nil || s.mux == nil {
+		return
+	}
+	s.mux.HandleFunc(path, handler)
 }
 
 func (s *Server) publish(msg Message) {

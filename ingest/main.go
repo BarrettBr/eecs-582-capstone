@@ -46,6 +46,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/BarrettBr/eecs-582-capstone/internal/api"
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
 	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
 	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
@@ -68,7 +69,7 @@ func main() {
 	defer appCfg.DB.Close()
 
 	// Run database migrations
-	if err := runMigrations(appCfg.DB, appCfg.MigrationsPath); err != nil {
+	if err := runMigrations(appCfg.DB, appCfg.Database.MigrationsPath); err != nil {
 		log.Fatalf("Error running migrations: %v", err)
 	}
 
@@ -76,31 +77,29 @@ func main() {
 	defer stop()
 
 	wsServer := stream.NewServer(stream.Config{
-		Addr:               appCfg.WSAddress,
-		Path:               appCfg.WSPath,
-		BatchSize:          appCfg.WSBatchSize,
-		BatchFlushInterval: appCfg.WSBatchFlushInterval,
+		Addr:               appCfg.Stream.Address,
+		Path:               appCfg.Stream.Path,
+		BatchSize:          appCfg.Stream.BatchSize,
+		BatchFlushInterval: appCfg.Stream.BatchFlushInterval,
 	})
-	// Create context that is canceled upon ctrl + c so it cancels the modbus loop
-	modbusLoop := ingest.NewModbusLoop(
-		appCfg.DB,
-		appCfg.Queries,
-		appCfg.ModbusPollInterval,
-		appCfg.SourceConfigPath,
-		ingest.MLFanoutConfig{
-			APIURL:             appCfg.MLAPIURL,
-			HTTPTimeout:        appCfg.MLHTTPTimeout,
-			BatchSize:          appCfg.MLBatchSize,
-			BatchFlushInterval: appCfg.MLBatchFlushInterval,
-			DropOnOverload:     appCfg.MLDropOnOverload,
+	historyAPI := api.NewHistoryAPI(appCfg.DB)
+	historyAPI.Register(wsServer.RegisterHTTPHandler)
+	modbusLoop, err := ingest.NewModbusLoop(
+		ingest.Dependencies{
+			DB:       appCfg.DB,
+			Queries:  appCfg.Queries,
+			Streamer: wsServer,
 		},
-		ingest.SQLFanoutConfig{
-			BatchSize:          appCfg.SQLBatchSize,
-			BatchFlushInterval: appCfg.SQLBatchFlushInterval,
-			NormalSampleRate:   appCfg.SQLNormalSampleRate,
+		ingest.LoopConfig{
+			PollInterval: appCfg.Ingest.PollInterval,
+			Sources:      appCfg.Sources.Sources,
+			MLFanout:     appCfg.Ingest.MLFanout,
+			SQLFanout:    appCfg.Ingest.SQLFanout,
 		},
-		wsServer,
 	)
+	if err != nil {
+		log.Fatalf("Error creating ingest loop: %v", err)
+	}
 
 	type faultInjectRequest struct {
 		SourceName string `json:"source_name"`
@@ -126,7 +125,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("Modbus service ready. Poll interval: %s", appCfg.ModbusPollInterval)
+	log.Printf("Modbus service ready. Poll interval: %s", appCfg.Ingest.PollInterval)
 	log.Printf("Websocket stream ready at %s", wsServer.URL())
 	if err := modbusLoop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("Error running ingest loop: %v", err)

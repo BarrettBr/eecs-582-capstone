@@ -1,4 +1,4 @@
-package ingest
+package config
 
 import (
 	"encoding/json"
@@ -38,7 +38,6 @@ type SimulatorSourceSettings struct {
 }
 
 func LoadSourceCatalog(path string) (*SourceCatalog, error) {
-	// Read and validate the full catalog before runtime startup continues.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read source config %s: %w", path, err)
@@ -63,7 +62,6 @@ func LoadSourceCatalog(path string) (*SourceCatalog, error) {
 }
 
 func validateSourceDefinition(source *SourceDefinition, seen map[string]struct{}) error {
-	// Enforce a concrete startup contract so bad config fails fast.
 	if source.Name == "" {
 		return fmt.Errorf("source name is required")
 	}
