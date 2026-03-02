@@ -12,7 +12,6 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { computed } from "vue";
 import AppMenuItem from "./AppMenuItem.vue";
 import type { MenuItem } from "./AppMenuItem.vue";
 
@@ -21,6 +20,16 @@ const allItems: MenuItem[] = [
 		label: "Dashboard",
 		icon: "pi pi-home",
 		to: "/dashboard",
+	},
+	{
+		label: "Export",
+		icon: "pi pi-download",
+		to: "/export",
+	},
+	{
+		label: "Admin",
+		icon: "pi pi-shield",
+		to: "/admin",
 	},
 	{ separator: true },
 	{

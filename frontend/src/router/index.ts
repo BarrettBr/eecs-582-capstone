@@ -12,7 +12,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import DashboardView from "@/views/DashboardView.vue";
 import AboutView from "@/views/AboutView.vue";
-import ChartDoc from "@/views/uikit/ChartDoc.vue";
+import ExportView from "@/views/ExportView.vue";
+import AdminView from "@/views/AdminView.vue";
 import AppLayout from "@/layout/AppLayout.vue";
 
 const router = createRouter({
@@ -36,6 +37,16 @@ const router = createRouter({
 					path: "/dashboard",
 					name: "dashboard",
 					component: DashboardView,
+				},
+				{
+					path: "/export",
+					name: "export",
+					component: ExportView,
+				},
+				{
+					path: "/admin",
+					name: "admin",
+					component: AdminView,
 				},
 			],
 		},
