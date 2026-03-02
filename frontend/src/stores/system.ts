@@ -91,7 +91,7 @@ export const useSystemStore = defineStore("system", () => {
 	function pushRecentEvent(event: TempEventData): void {
         // Strictly keep 8 for the dashboard list
         recentEvents.value.unshift(event);
-        recentEvents.value = recentEvents.value.slice(0, 8);
+        // recentEvents.value = recentEvents.value.slice(0, 8);
 
         // Kepe as many as needed for the live chart
         chartEvents.value.unshift(event);
@@ -99,7 +99,7 @@ export const useSystemStore = defineStore("system", () => {
 
         metrics.value.totalRecords += 1;
         metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
-        console.log("Stream event received", event);
+        //console.log("Stream event received", event);
         updateActiveAlerts();
     }
 
@@ -107,7 +107,7 @@ export const useSystemStore = defineStore("system", () => {
 		mlAlerts.value.unshift(message);
 		mlAlerts.value = mlAlerts.value.slice(0, 8);
 		status.value.ml = "Receiving";
-		console.log("ML result received", message);
+		//console.log("ML result received", message);
 		updateActiveAlerts();
 	}
 
@@ -116,7 +116,7 @@ export const useSystemStore = defineStore("system", () => {
 		recentValveEvents.value = recentValveEvents.value.slice(0, 8);
 		metrics.value.totalRecords += 1;
 		metrics.value.lastIngest = new Date(event.timestamp).toLocaleString();
-		console.log("Valve stream event received", event);
+		//console.log("Valve stream event received", event);
 		updateActiveAlerts();
 	}
 
@@ -137,7 +137,7 @@ export const useSystemStore = defineStore("system", () => {
 			return;
 		}
 
-		console.log("Websocket batch received", batch);
+		//console.log("Websocket batch received", batch);
 
 		for (const message of batch.messages) {
 			if (message.kind === "event") {
