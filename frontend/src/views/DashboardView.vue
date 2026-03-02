@@ -15,11 +15,10 @@ import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
 import Card from "primevue/card";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
 import Tag from "primevue/tag";
 import Button from "primevue/button";
 import EventSwitcherTable from "@/components/EventSwitcherTable.vue";
+import HistoricalSnapshotTable from "@/components/HistoricalSnapshotTable.vue";
 
 const store = useSystemStore();
 
@@ -66,6 +65,9 @@ const chartOptions = ref({
     maintainAspectRatio: false
 });
 
+// description: Maps the websocket state into a tag severity.
+// input: The current websocket status label.
+// output: Returns the severity string used by the status badge.
 function getSocketSeverity(state: string) {
   switch (state) {
     case "Connected":
@@ -188,6 +190,10 @@ function getSocketSeverity(state: string) {
 						:recentEvents="recentEvents"
 						:mlAlerts="mlAlerts"
 						/>
+				<HistoricalSnapshotTable
+						:recentEvents="recentEvents"
+						:mlAlerts="mlAlerts"
+						/>
 			</div>
 		</div>
 	</main>
@@ -223,6 +229,10 @@ function getSocketSeverity(state: string) {
     
     .col-span-2 {
         grid-column: span 8 !important; /* Spanning cards take 8/12 (2/3 of the row) */
+    }
+
+    .col-span-full {
+        grid-column: span 12 !important;
     }
 }
 
