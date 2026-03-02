@@ -65,6 +65,21 @@ const chartOptions = ref({
     responsive: true,
     maintainAspectRatio: false
 });
+
+function getSocketSeverity(state: string) {
+  switch (state) {
+    case "Connected":
+      return "success";
+    case "Connecting...":
+      return "warning";
+    case "Error":
+    case "Disconnected":
+      return "danger";
+    default:
+      return "info";
+  }
+}
+
 </script>
 
 <template>
@@ -76,15 +91,41 @@ const chartOptions = ref({
 				<Card class="card">
 					<template #title>System Status</template>
 					<template #content>
-						<ul class="status-list">
-							<li><strong>API:</strong> {{ status.api }}</li>
-							<li>
-								<strong>Ingestion:</strong>
-								{{ status.ingestion }}
-							</li>
-							<li><strong>ML Service:</strong> {{ status.ml }}</li>
-							<li><strong>Websocket:</strong> {{ streamState }}</li>
-						</ul>
+						<div class="status-grid">
+
+							<div class="status-item">
+								<span class="status-label">API</span>
+								<Tag
+										:value="status.api"
+										:severity="status.api === 'Online' ? 'success' : 'danger'"
+										/>
+							</div>
+
+							<div class="status-item">
+								<span class="status-label">Ingestion</span>
+								<Tag
+										:value="status.ingestion"
+										:severity="status.ingestion === 'Streaming' ? 'success' : 'danger'"
+										/>
+							</div>
+
+							<div class="status-item">
+								<span class="status-label">ML Service</span>
+								<Tag
+										:value="status.ml"
+										:severity="status.ml === 'Receiving' ? 'success' : 'danger'"
+										/>
+							</div>
+
+							<div class="status-item">
+								<span class="status-label">Websocket</span>
+								<Tag
+										:value="streamState"
+										:severity="getSocketSeverity(streamState)"
+										/>
+							</div>
+
+						</div>
 					</template>
 				</Card>
 
@@ -154,7 +195,7 @@ const chartOptions = ref({
 						<ul class="metrics-list">
 							<li v-if="recentValveEvents.length === 0">No valve events yet</li>
 							<li v-for="event in recentValveEvents" :key="event.timestamp">
-								{{ event.display_time ?? event.timestamp }}
+								{{ new Date(event.timestamp).toLocaleTimeString() }}
 								flow {{ event.flow_rate ?? "n/a" }}
 								<span v-if="event.anomalies && event.anomalies.length > 0">
 									alerts {{ event.anomalies.join(", ") }}
@@ -248,5 +289,22 @@ const chartOptions = ref({
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-label {
+  font-weight: 500;
+  color: var(--text-color-secondary);
 }
 </style>

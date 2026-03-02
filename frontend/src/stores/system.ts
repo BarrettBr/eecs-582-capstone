@@ -270,14 +270,21 @@ export const useSystemStore = defineStore("system", () => {
 			console.log("Websocket closed", streamURL);
 			streamState.value = "Disconnected";
 			status.value.ingestion = "Disconnected";
+			status.value.ml = "Offline";
+			status.value.api = "Offline";
+
 			loading.value = false;
 		});
 
 		socket.addEventListener("error", (err) => {
-			console.error("Websocket stream error", err);
-			streamState.value = "Error";
-			status.value.ingestion = "Stream Error";
-			loading.value = false;
+				console.error("Websocket stream error", err);
+
+				streamState.value = "Error";
+				status.value.ingestion = "Stream Error";
+				status.value.ml = "Offline";
+				status.value.api = "Offline";
+
+				loading.value = false;
 		});
 	}
 
