@@ -10,7 +10,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
@@ -18,6 +18,8 @@ import Card from "primevue/card";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Tag from "primevue/tag";
+import Button from "primevue/button";
+import EventSwitcherTable from "@/components/EventSwitcherTable.vue";
 
 const store = useSystemStore();
 
@@ -37,6 +39,14 @@ const { injectSimulatorFault } = store;
 
 onMounted(() => {
 	store.startStream();
+});
+
+watch(faultStatus, (newValue) => {
+  if (newValue === "Injected") {
+    setTimeout(() => {
+      store.faultStatus = "Idle";
+    }, 2000);
+  }
 });
 
 const chartOptions = ref({
@@ -89,83 +99,55 @@ const chartOptions = ref({
 						/>
 					</template>
 				</Card>
-
 				<Card class="card">
-					<template #title>Metrics</template>
-					<template #content>
-						<ul class="metrics-list">
-							<li>
-								<strong>Total Records:</strong>
-								{{ metrics.totalRecords }}
-							</li>
-							<li>
-								<strong>Active Alerts:</strong>
-								{{ metrics.activeAlerts }}
-							</li>
-							<li>
-								<strong>Last Ingest:</strong>
-								{{ metrics.lastIngest }}
-							</li>
-							<li>
-								<button type="button" @click="injectSimulatorFault">
-									Inject Fault
-								</button>
-								{{ faultStatus }}
-							</li>
-						</ul>
-					</template>
-				</Card>
-				<Card class="card col-span-2">
-				<template #title>Recent Temperature Events</template>
+				<template #title>Metrics</template>
+
 				<template #content>
+					<div class="metrics-grid">
 
-					<DataTable
-							:value="recentEvents"
-							paginator
-							:rows="5"
-							responsiveLayout="scroll"
-							stripedRows
-							size="small"
-							>
+						<div class="metric-item">
+							<span class="metric-label">Total Records</span>
+							<span class="metric-value">
+								{{ metrics.totalRecords }}
+							</span>
+						</div>
 
-							<Column field="timestamp" header="Time">
-							<template #body="{ data }">
-								{{ new Date(data.timestamp).toLocaleTimeString() }}
-							</template>
-							</Column>
+						<div class="metric-item">
+							<span class="metric-label">Active Alerts</span>
+							<Tag
+									:value="metrics.activeAlerts"
+									:severity="metrics.activeAlerts > 0 ? 'danger' : 'success'"
+									/>
+						</div>
 
-							<Column field="sensor_number" header="Sensor" />
+						<div class="metric-item">
+							<span class="metric-label">Last Ingest</span>
+							<span class="metric-subtle">
+								{{ metrics.lastIngest }}
+							</span>
+						</div>
 
-							<Column field="temperature" header="Temperature">
-							<template #body="{ data }">
-								{{ data.temperature ?? "n/a" }} °C
-							</template>
-							</Column>
-
-							<Column header="Fan">
-							<template #body="{ data }">
+						<div class="metric-actions">
+							<Button
+									label="Inject Fault"
+									icon="pi pi-exclamation-triangle"
+									severity="warning"
+									@click="injectSimulatorFault"
+									/>
 								<Tag
-										:value="data.fan_on ? 'ON' : 'OFF'"
-										:severity="data.fan_on ? 'success' : 'secondary'"
+										:value="faultStatus"
+										:severity="faultStatus === 'Injected' ? 'danger' : 'info'"
 										/>
-							</template>
-							</Column>
+						</div>
 
-							<Column header="Anomalies">
-							<template #body="{ data }">
-								<Tag
-										v-if="data.anomalies?.length"
-										:value="data.anomalies.join(', ')"
-										severity="danger"
-										/>
-								<span v-else>-</span>
-							</template>
-							</Column>
-
-					</DataTable>
-
+					</div>
 				</template>
 				</Card>
+				<EventSwitcherTable
+						:recentEvents="recentEvents"
+						:mlAlerts="mlAlerts"
+						/>
+
 				<Card class="card">
 					<template #title>Valve Events</template>
 					<template #content>
@@ -180,45 +162,6 @@ const chartOptions = ref({
 							</li>
 						</ul>
 					</template>
-				</Card>
-				<Card class="card col-span-2">
-				<template #title>ML Alerts</template>
-				<template #content>
-
-					<DataTable
-							:value="mlAlerts"
-							paginator
-							:rows="5"
-							stripedRows
-							size="small"
-							>
-
-							<Column field="generated_at" header="Generated">
-							<template #body="{ data }">
-								{{ new Date(data.generated_at).toLocaleTimeString() }}
-							</template>
-							</Column>
-
-							<Column header="Anomaly">
-							<template #body="{ data }">
-								<Tag
-										:value="data.has_anomaly ? 'YES' : 'NO'"
-										:severity="data.has_anomaly ? 'danger' : 'success'"
-										/>
-							</template>
-							</Column>
-
-							<Column header="Labels">
-							<template #body="{ data }">
-								{{ data.labels?.join(', ') || '-' }}
-							</template>
-							</Column>
-
-							<Column field="score" header="Score" />
-
-					</DataTable>
-
-				</template>
 				</Card>
 			</div>
 		</div>
@@ -272,5 +215,38 @@ const chartOptions = ref({
 
 .loading {
 	font-style: italic;
+}
+
+.metrics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-label {
+  font-weight: 500;
+  color: var(--text-color-secondary);
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.metric-subtle {
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+}
+
+.metric-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>
