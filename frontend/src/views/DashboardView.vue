@@ -15,6 +15,9 @@ import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
 import Card from "primevue/card";
+import DataTable from "primevue/datatable";
+import Column from "primevue/column";
+import Tag from "primevue/tag";
 
 const store = useSystemStore();
 
@@ -88,23 +91,6 @@ const chartOptions = ref({
 				</Card>
 
 				<Card class="card">
-					<template #title>Valve Events</template>
-					<template #content>
-						<ul class="metrics-list">
-							<li v-if="recentValveEvents.length === 0">No valve events yet</li>
-							<li v-for="event in recentValveEvents" :key="event.timestamp">
-								{{ new Date(event.timestamp).toLocaleTimeString() }}
-								flow {{ event.flow_rate ?? "n/a" }}
-								<span v-if="event.anomalies && event.anomalies.length > 0">
-									alerts {{ event.anomalies.join(", ") }}
-								</span>
-							</li>
-						</ul>
-					</template>
-				</Card>
-
-
-				<Card class="card">
 					<template #title>Metrics</template>
 					<template #content>
 						<ul class="metrics-list">
@@ -129,14 +115,65 @@ const chartOptions = ref({
 						</ul>
 					</template>
 				</Card>
+				<Card class="card col-span-2">
+				<template #title>Recent Temperature Events</template>
+				<template #content>
+
+					<DataTable
+							:value="recentEvents"
+							paginator
+							:rows="5"
+							responsiveLayout="scroll"
+							stripedRows
+							size="small"
+							>
+
+							<Column field="timestamp" header="Time">
+							<template #body="{ data }">
+								{{ new Date(data.timestamp).toLocaleTimeString() }}
+							</template>
+							</Column>
+
+							<Column field="sensor_number" header="Sensor" />
+
+							<Column field="temperature" header="Temperature">
+							<template #body="{ data }">
+								{{ data.temperature ?? "n/a" }} °C
+							</template>
+							</Column>
+
+							<Column header="Fan">
+							<template #body="{ data }">
+								<Tag
+										:value="data.fan_on ? 'ON' : 'OFF'"
+										:severity="data.fan_on ? 'success' : 'secondary'"
+										/>
+							</template>
+							</Column>
+
+							<Column header="Anomalies">
+							<template #body="{ data }">
+								<Tag
+										v-if="data.anomalies?.length"
+										:value="data.anomalies.join(', ')"
+										severity="danger"
+										/>
+								<span v-else>-</span>
+							</template>
+							</Column>
+
+					</DataTable>
+
+				</template>
+				</Card>
 				<Card class="card">
-					<template #title>Recent Events</template>
+					<template #title>Valve Events</template>
 					<template #content>
 						<ul class="metrics-list">
-							<li v-if="recentEvents.length === 0">No events yet</li>
-							<li v-for="event in recentEvents" :key="event.timestamp">
+							<li v-if="recentValveEvents.length === 0">No valve events yet</li>
+							<li v-for="event in recentValveEvents" :key="event.timestamp">
 								{{ new Date(event.timestamp).toLocaleTimeString() }}
-								temperature {{ event.temperature ?? "n/a" }}
+								flow {{ event.flow_rate ?? "n/a" }}
 								<span v-if="event.anomalies && event.anomalies.length > 0">
 									alerts {{ event.anomalies.join(", ") }}
 								</span>
@@ -144,17 +181,44 @@ const chartOptions = ref({
 						</ul>
 					</template>
 				</Card>
+				<Card class="card col-span-2">
+				<template #title>ML Alerts</template>
+				<template #content>
 
-				<Card class="card">
-					<template #title>ML Alerts</template>
-					<template #content>
-						<ul class="metrics-list">
-							<li v-if="mlAlerts.length === 0">No ML alerts yet</li>
-							<li v-for="(alert, index) in mlAlerts" :key="index">
-								{{ JSON.stringify(alert) }}
-							</li>
-						</ul>
-					</template>
+					<DataTable
+							:value="mlAlerts"
+							paginator
+							:rows="5"
+							stripedRows
+							size="small"
+							>
+
+							<Column field="generated_at" header="Generated">
+							<template #body="{ data }">
+								{{ new Date(data.generated_at).toLocaleTimeString() }}
+							</template>
+							</Column>
+
+							<Column header="Anomaly">
+							<template #body="{ data }">
+								<Tag
+										:value="data.has_anomaly ? 'YES' : 'NO'"
+										:severity="data.has_anomaly ? 'danger' : 'success'"
+										/>
+							</template>
+							</Column>
+
+							<Column header="Labels">
+							<template #body="{ data }">
+								{{ data.labels?.join(', ') || '-' }}
+							</template>
+							</Column>
+
+							<Column field="score" header="Score" />
+
+					</DataTable>
+
+				</template>
 				</Card>
 			</div>
 		</div>
