@@ -39,7 +39,9 @@ const containerClass = computed(() => ({
 			<AppTopbar />
 
 			<div class="layout-main">
-				<RouterView />
+				<div class="layout-content-shell">
+					<RouterView />
+				</div>
 			</div>
 		</div>
 	</div>
@@ -70,6 +72,12 @@ const containerClass = computed(() => ({
 .layout-main {
 	flex: 1;
 	padding: 1.5rem 2rem;
+}
+
+.layout-content-shell {
+	width: 100%;
+	max-width: 1440px;
+	margin: 0 auto;
 }
 
 /* Mobile overlay */
