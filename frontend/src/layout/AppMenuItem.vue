@@ -35,10 +35,16 @@ const isActive = computed(() =>
 	props.item.to ? route.path.startsWith(props.item.to) : false,
 );
 
+// description: Opens or closes a nested menu section.
+// input: No arguments; uses the local open state.
+// output: Flips the submenu visibility for this item.
 function toggle() {
 	open.value = !open.value;
 }
 
+// description: Cleans up navigation state after a sidebar click.
+// input: No arguments; reads the shared layout store.
+// output: Closes the mobile sidebar menu.
 function handleNavClick() {
 	// Close mobile menu on navigation
 	layout.closeMobileMenu();

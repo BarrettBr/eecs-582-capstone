@@ -1,22 +1,18 @@
 <script setup lang="ts">
 import Card from "primevue/card";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
 </script>
 
 <template>
 	<main class="page-shell">
 		<section class="page-hero">
 			<div>
-				<p class="eyebrow">Administration</p>
-				<h1>Manage platform access, rule configuration, and source controls.</h1>
+				<p class="eyebrow">Admin</p>
+				<h1>Admin Dashboard</h1>
 				<p class="page-copy">
-					This is a frontend placeholder for future admin workflows. It is meant
-					to provide structure for user management, rule editing, and service
-					configuration without implementing backend behavior yet.
+					Manage users, rules, and system inputs from one place.
 				</p>
 			</div>
-			<Tag value="Skeleton" severity="contrast" />
 		</section>
 
 		<section class="page-grid">
@@ -24,7 +20,7 @@ import Tag from "primevue/tag";
 				<template #title>Users & Permissions</template>
 				<template #content>
 					<p class="section-copy">
-						Future access controls for admins, operators, and viewers.
+						Manage who can access the system and what they can do.
 					</p>
 					<div class="stack-list">
 						<div class="list-row">
@@ -51,8 +47,7 @@ import Tag from "primevue/tag";
 				<template #title>Rule Management</template>
 				<template #content>
 					<p class="section-copy">
-						Placeholder for adding validation rules, thresholds, and ML review
-						workflows.
+						Manage alert rules, thresholds, and review settings.
 					</p>
 					<div class="stack-list">
 						<div class="list-row">
@@ -79,8 +74,7 @@ import Tag from "primevue/tag";
 				<template #title>Service Inputs</template>
 				<template #content>
 					<p class="section-copy">
-						Future controls for enabling or disabling sources and selecting which
-						services ingest from.
+						Manage which data sources are active.
 					</p>
 					<div class="stack-list">
 						<div class="list-row">

@@ -48,6 +48,9 @@ export interface ManagedWebSocket extends WebSocket {
 	_queue: string[];
 }
 
+// description: Builds the websocket URL used by the frontend stream client.
+// input: Reads the Vite env override or current browser location.
+// output: Returns the websocket endpoint string.
 export function getDefaultStreamURL(): string {
 	const envURL = import.meta.env.VITE_INGEST_WS_URL as string | undefined;
 	if (envURL && envURL.trim() !== "") {
@@ -59,6 +62,9 @@ export function getDefaultStreamURL(): string {
 	return `${protocol}://${host}:8080/ws`;
 }
 
+// description: Opens a managed websocket and buffers messages until it connects.
+// input: Optional websocket URL; defaults to the app stream endpoint.
+// output: Returns a websocket with a small outbound queue.
 export function connect(url = getDefaultStreamURL()): ManagedWebSocket {
 	if (!url || url.trim() === "") {
 		throw new Error("WebSocket url not set");
@@ -77,6 +83,9 @@ export function connect(url = getDefaultStreamURL()): ManagedWebSocket {
 	return socket;
 }
 
+// description: Sends or queues one outbound websocket message.
+// input: The managed socket and a string or JSON-friendly payload.
+// output: Returns true if the message was sent or queued.
 export function send(
 	socket: ManagedWebSocket | null,
 	msg: string | object,
@@ -98,10 +107,16 @@ export function send(
 	return false;
 }
 
+// description: Closes the websocket if one is active.
+// input: The managed socket or null.
+// output: Ends the connection and returns nothing.
 export function close(socket: ManagedWebSocket | null): void {
 	socket?.close();
 }
 
+// description: Parses batch messages and hands valid batches to a callback.
+// input: The managed socket and a batch handler function.
+// output: Registers a message listener on the socket.
 export function onBatch(
 	socket: ManagedWebSocket,
 	handler: (batch: StreamBatch) => void,
