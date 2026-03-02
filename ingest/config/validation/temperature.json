@@ -25,7 +25,7 @@
     {
       "field": "temperature",
       "op": ">",
-      "value": 75.0,
+      "value": 77.0,
       "label": "temperature_high"
     }
   ]
