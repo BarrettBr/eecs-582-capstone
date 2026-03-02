@@ -188,22 +188,6 @@ function getSocketSeverity(state: string) {
 						:recentEvents="recentEvents"
 						:mlAlerts="mlAlerts"
 						/>
-
-				<Card class="card">
-					<template #title>Valve Events</template>
-					<template #content>
-						<ul class="metrics-list">
-							<li v-if="recentValveEvents.length === 0">No valve events yet</li>
-							<li v-for="event in recentValveEvents" :key="event.timestamp">
-								{{ new Date(event.timestamp).toLocaleTimeString() }}
-								flow {{ event.flow_rate ?? "n/a" }}
-								<span v-if="event.anomalies && event.anomalies.length > 0">
-									alerts {{ event.anomalies.join(", ") }}
-								</span>
-							</li>
-						</ul>
-					</template>
-				</Card>
 			</div>
 		</div>
 	</main>
