@@ -10,7 +10,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import Avatar from "primevue/avatar";
 import Button from "primevue/button";
@@ -21,6 +21,20 @@ const layout = useLayoutStore();
 const router = useRouter();
 
 const userMenu = ref<InstanceType<typeof Menu> | null>(null);
+
+const isMobile = ref(window.innerWidth < 1024);
+
+function handleResize() {
+  isMobile.value = window.innerWidth < 1024;
+}
+
+onMounted(() => {
+  window.addEventListener("resize", handleResize);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize);
+});
 
 const userMenuItems = [
 	{
@@ -46,6 +60,7 @@ function toggleUserMenu(event: Event) {
 	<div class="layout-topbar">
 		<!-- Left: hamburger -->
 		<Button
+			v-if="isMobile"
 			icon="pi pi-bars"
 			text
 			rounded
