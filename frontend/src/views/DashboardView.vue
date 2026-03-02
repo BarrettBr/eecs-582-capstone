@@ -10,7 +10,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
@@ -32,6 +32,7 @@ const {
 	faultStatus,
 	status,
 	metrics,
+	temperatureChartBounds,
 } = storeToRefs(store);
 
 const { injectSimulatorFault } = store;
@@ -48,21 +49,37 @@ watch(faultStatus, (newValue) => {
   }
 });
 
-const chartOptions = ref({
-    animation: {
-        duration: 0 // Set to 0 to remove the "flash/jump" entirely
-    },
-    hover: {
-        mode: 'nearest',
-        intersect: true
-    },
-    scales: {
-        y: {
-            beginAtZero: false
-        }
-    },
-    responsive: true,
-    maintainAspectRatio: false
+const chartOptions = computed(() => {
+	const yScale: {
+		beginAtZero: boolean;
+		min?: number;
+		max?: number;
+	} = {
+		beginAtZero: false,
+	};
+
+	if (
+		typeof temperatureChartBounds.value.min === "number" &&
+		typeof temperatureChartBounds.value.max === "number"
+	) {
+		yScale.min = temperatureChartBounds.value.min;
+		yScale.max = temperatureChartBounds.value.max;
+	}
+
+	return {
+		animation: {
+			duration: 0,
+		},
+		hover: {
+			mode: "nearest",
+			intersect: true,
+		},
+		scales: {
+			y: yScale,
+		},
+		responsive: true,
+		maintainAspectRatio: false,
+	};
 });
 
 // description: Maps the websocket state into a tag severity.

@@ -34,6 +34,12 @@ export const useSystemStore = defineStore("system", () => {
 	const LIVE_EVENT_LIMIT = 8;
 	const LIVE_ALERT_LIMIT = 8;
 	const CHART_POINT_LIMIT = 50;
+	const CHART_BUCKET_WIDTH_MS = 150; // Want to be more than the sources.json interval otherwise gaps show
+	const CHART_Y_MIN_PADDING = 0.5;
+	const CHART_Y_PADDING_RATIO = 0.15;
+	const CHART_Y_STEP = 1;
+	const CHART_Y_MIN_RANGE = 4;
+	const CHART_Y_SHRINK_DELAY_MS = 10_000;
 
 	interface SystemStatus {
 		api: string;
@@ -80,6 +86,12 @@ export const useSystemStore = defineStore("system", () => {
 		raw_response: unknown;
 	}
 
+	interface ChartBucket {
+		bucketStartMs: number;
+		sum: number;
+		count: number;
+	}
+
 	const loading = ref(true);
 	const recentEvents = ref<TempEventData[]>([]);
 	const chartEvents = ref<TempEventData[]>([]);
@@ -88,7 +100,7 @@ export const useSystemStore = defineStore("system", () => {
 	const streamState = ref("Connecting...");
 	const faultStatus = ref("Idle");
 	let socket: ManagedWebSocket | null = null;
-	let chartBuffer: TempEventData[] = [];
+	let chartBuckets: ChartBucket[] = [];
 	let pendingTempEvents: TempEventData[] = [];
 	let pendingValveEvents: ValveEventData[] = [];
 	let pendingMLAlerts: MLAnomalyPayload[] = [];
@@ -98,6 +110,7 @@ export const useSystemStore = defineStore("system", () => {
 	let uiFlushTimer: ReturnType<typeof setTimeout> | null = null;
 	let historicalEventBuffer: TempEventData[] = [];
 	let historicalMLAlertBuffer: MLAnomalyPayload[] = [];
+	let chartShrinkLockedUntilMs = 0;
 
 	const status = ref<SystemStatus>({
 		api: "Online",
@@ -122,6 +135,13 @@ export const useSystemStore = defineStore("system", () => {
 				tension: 0.4,
 			},
 		],
+	});
+	const temperatureChartBounds = ref<{
+		min: number | null;
+		max: number | null;
+	}>({
+		min: null,
+		max: null,
 	});
 
 	// description: Recounts alert totals from rule-based and ML results.
@@ -201,25 +221,166 @@ export const useSystemStore = defineStore("system", () => {
 		};
 	}
 
+	function alignBucketStart(timestampMs: number): number {
+		return (
+			Math.floor(timestampMs / CHART_BUCKET_WIDTH_MS) * CHART_BUCKET_WIDTH_MS
+		);
+	}
+
+	function createEmptyBucket(bucketStartMs: number): ChartBucket {
+		return {
+			bucketStartMs,
+			sum: 0,
+			count: 0,
+		};
+	}
+
+	function resetChartBuckets(latestBucketStartMs: number): void {
+		chartBuckets = [];
+		for (let index = CHART_POINT_LIMIT - 1; index >= 0; index -= 1) {
+			chartBuckets.push(
+				createEmptyBucket(latestBucketStartMs - index * CHART_BUCKET_WIDTH_MS),
+			);
+		}
+	}
+
+	function advanceChartBuckets(latestBucketStartMs: number): void {
+		if (chartBuckets.length === 0) {
+			resetChartBuckets(latestBucketStartMs);
+			return;
+		}
+
+		const currentLatestBucket = chartBuckets[chartBuckets.length - 1]!;
+		if (latestBucketStartMs <= currentLatestBucket.bucketStartMs) {
+			return;
+		}
+
+		const bucketShift = Math.floor(
+			(latestBucketStartMs - currentLatestBucket.bucketStartMs) /
+				CHART_BUCKET_WIDTH_MS,
+		);
+		if (bucketShift >= CHART_POINT_LIMIT) {
+			resetChartBuckets(latestBucketStartMs);
+			return;
+		}
+
+		for (let index = 0; index < bucketShift; index += 1) {
+			chartBuckets.shift();
+			const nextBucketStartMs =
+				currentLatestBucket.bucketStartMs + (index + 1) * CHART_BUCKET_WIDTH_MS;
+			chartBuckets.push(createEmptyBucket(nextBucketStartMs));
+		}
+	}
+
+	function appendChartSample(event: TempEventData): void {
+		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
+		const bucketStartMs = alignBucketStart(timestampMs);
+		advanceChartBuckets(bucketStartMs);
+		if (chartBuckets.length === 0) {
+			return;
+		}
+
+		const oldestBucketStartMs = chartBuckets[0]!.bucketStartMs;
+		if (bucketStartMs < oldestBucketStartMs) {
+			return;
+		}
+
+		const bucketIndex = Math.floor(
+			(bucketStartMs - oldestBucketStartMs) / CHART_BUCKET_WIDTH_MS,
+		);
+		const bucket = chartBuckets[bucketIndex];
+		if (!bucket || typeof event.temperature !== "number") {
+			return;
+		}
+
+		bucket.sum += event.temperature;
+		bucket.count += 1;
+	}
+
 	// description: Rebuilds the reactive chart data from the buffered samples.
 	// input: Reads the current non-reactive chart buffer.
 	// output: Updates chart labels and temperature series in one batch.
 	function flushChartUpdates(): void {
-		const count = chartBuffer.length;
-		const labels = new Array<string>(count);
-		const temperatures = new Array<number | undefined>(count);
-
-		for (let index = 0; index < count; index += 1) {
-			const event = chartBuffer[count - 1 - index]!;
-			labels[index] =
-				event.display_time ??
-				formatDisplayTime(
-					resolveTimestampMs(event.timestamp, event.timestamp_ms),
-				);
-			temperatures[index] = event.temperature;
+		if (chartBuckets.length === 0) {
+			chartEvents.value = [];
+			temperatureChartBounds.value = {
+				min: null,
+				max: null,
+			};
+			chartShrinkLockedUntilMs = 0;
+			temperatureChartData.value = {
+				labels: [],
+				datasets: [
+					{
+						...temperatureChartData.value.datasets[0]!,
+						data: [],
+					},
+				],
+			};
+			return;
 		}
 
-		chartEvents.value = chartBuffer.slice();
+		const labels = new Array<string>(CHART_POINT_LIMIT);
+		const temperatures = new Array<number | undefined>(CHART_POINT_LIMIT);
+		for (let index = 0; index < CHART_POINT_LIMIT; index += 1) {
+			const bucket = chartBuckets[index]!;
+			labels[index] = formatDisplayTime(bucket.bucketStartMs);
+			if (bucket.count > 0) {
+				temperatures[index] = bucket.sum / bucket.count;
+			}
+		}
+
+		const definedTemperatures = temperatures.filter(
+			(value): value is number => typeof value === "number",
+		);
+		if (definedTemperatures.length > 0) {
+			const observedMin = Math.min(...definedTemperatures);
+			const observedMax = Math.max(...definedTemperatures);
+			const observedRange = Math.max(0.1, observedMax - observedMin);
+			const padding = Math.max(
+				CHART_Y_MIN_PADDING,
+				observedRange * CHART_Y_PADDING_RATIO,
+			);
+			let targetMin =
+				Math.floor((observedMin - padding) / CHART_Y_STEP) * CHART_Y_STEP;
+			let targetMax =
+				Math.ceil((observedMax + padding) / CHART_Y_STEP) * CHART_Y_STEP;
+			if (targetMax - targetMin < CHART_Y_MIN_RANGE) {
+				const midpoint = (targetMin + targetMax) / 2;
+				const halfRange = CHART_Y_MIN_RANGE / 2;
+				targetMin =
+					Math.floor((midpoint - halfRange) / CHART_Y_STEP) * CHART_Y_STEP;
+				targetMax = targetMin + CHART_Y_MIN_RANGE;
+			}
+			const currentMin = temperatureChartBounds.value.min;
+			const currentMax = temperatureChartBounds.value.max;
+			const nowMs = Date.now();
+
+			if (
+				currentMin === null ||
+				currentMax === null ||
+				observedMin < currentMin ||
+				observedMax > currentMax
+			) {
+				temperatureChartBounds.value = {
+					min: targetMin,
+					max: targetMax,
+				};
+				chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
+			} else if (
+				nowMs >= chartShrinkLockedUntilMs &&
+				targetMin >= currentMin + CHART_Y_STEP &&
+				targetMax <= currentMax - CHART_Y_STEP
+			) {
+				temperatureChartBounds.value = {
+					min: targetMin,
+					max: targetMax,
+				};
+				chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
+			}
+		}
+
+		chartEvents.value = [];
 		const currentDataset = temperatureChartData.value.datasets[0]!;
 		temperatureChartData.value = {
 			labels,
@@ -299,11 +460,9 @@ export const useSystemStore = defineStore("system", () => {
 				pendingTempEvents,
 				LIVE_EVENT_LIMIT,
 			);
-			chartBuffer = prependNewestFirst(
-				chartBuffer,
-				pendingTempEvents,
-				CHART_POINT_LIMIT,
-			);
+			for (const event of pendingTempEvents) {
+				appendChartSample(event);
+			}
 		}
 
 		if (hasValveEvents) {
@@ -492,6 +651,7 @@ export const useSystemStore = defineStore("system", () => {
 		getHistoricalEventSnapshot,
 		getHistoricalMLAlertSnapshot,
 		temperatureChartData,
+		temperatureChartBounds,
 		chartEvents,
 	};
 });
