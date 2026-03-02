@@ -10,7 +10,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
@@ -18,7 +18,7 @@ import Card from "primevue/card";
 
 const store = useSystemStore();
 
-// This keeps the variable names identical to your current dashboard template
+// load the variable names in the expected way
 const {
 	loading,
 	recentEvents,
@@ -35,28 +35,31 @@ const { injectSimulatorFault } = store;
 onMounted(() => {
 	store.startStream();
 });
+
+const chartOptions = ref({
+    animation: {
+        duration: 0 // Set to 0 to remove the "flash/jump" entirely
+    },
+    hover: {
+        mode: 'nearest',
+        intersect: true
+    },
+    scales: {
+        y: {
+            beginAtZero: false
+        }
+    },
+    responsive: true,
+    maintainAspectRatio: false
+});
 </script>
 
 <template>
 	<main>
 		<div class="dashboard">
-			<h1 class="dashboard-title">System Dashboard</h1>
-
 			<div v-if="loading" class="loading">Loading system data...</div>
 
 			<div v-else class="grid">
-				<Card class="card col-span-2">
-					<template #title>Live Temperature</template>
-					<template #content>
-						<Chart
-							type="line"
-							:data="store.temperatureChartData"
-							:options="chartOptions"
-							style="height: 300px"
-						/>
-					</template>
-				</Card>
-
 				<Card class="card">
 					<template #title>System Status</template>
 					<template #content>
@@ -71,6 +74,19 @@ onMounted(() => {
 						</ul>
 					</template>
 				</Card>
+
+				<Card class="card col-span-2">
+					<template #title>Live Temperature</template>
+					<template #content>
+						<Chart
+							type="line"
+							:data="store.temperatureChartData"
+							:options="chartOptions"
+							style="height: 300px"
+						/>
+					</template>
+				</Card>
+
 				<Card class="card">
 					<template #title>Valve Events</template>
 					<template #content>
@@ -86,6 +102,7 @@ onMounted(() => {
 						</ul>
 					</template>
 				</Card>
+
 
 				<Card class="card">
 					<template #title>Metrics</template>
@@ -153,15 +170,28 @@ onMounted(() => {
 	margin-bottom: 1.5rem;
 	color: black;
 }
-
+/* Update your existing grid class */
 .grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-	gap: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr); /* Switch to a 12-column base */
+    gap: 1.5rem;
 }
 
+/* Define how the cards behave by default */
 .card {
-	padding: 1rem;
+    padding: 1rem;
+    grid-column: span 12; /* On mobile/small screens, they take full width */
+}
+
+/* Define the spans for larger screens */
+@media (min-width: 768px) {
+    .card {
+        grid-column: span 4; /* Standard cards take 4/12 (3 columns total) */
+    }
+    
+    .col-span-2 {
+        grid-column: span 8 !important; /* Spanning cards take 8/12 (2/3 of the row) */
+    }
 }
 
 .status-list,
