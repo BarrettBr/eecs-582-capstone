@@ -1,22 +1,18 @@
 <script setup lang="ts">
 import Card from "primevue/card";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
 </script>
 
 <template>
 	<main class="page-shell">
 		<section class="page-hero">
 			<div>
-				<p class="eyebrow">Data Export</p>
-				<h1>Prepare historical exports for reporting and offline review.</h1>
+				<p class="eyebrow">Export</p>
+				<h1>Export Dashboard</h1>
 				<p class="page-copy">
-					This page is a frontend skeleton for future export workflows. It will
-					ultimately request recent data windows from the backend and package
-					them into downloadable formats.
+					Manage saved reports and build exports from recent system activity.
 				</p>
 			</div>
-			<Tag value="Skeleton" severity="contrast" />
 		</section>
 
 		<section class="page-grid">
@@ -24,8 +20,7 @@ import Tag from "primevue/tag";
 				<template #title>Export Window</template>
 				<template #content>
 					<p class="section-copy">
-						Choose the time range that the backend will query once the export
-						API is wired in.
+						Choose how much recent data to include.
 					</p>
 					<div class="button-row">
 						<Button label="Last Hour" severity="secondary" outlined />
@@ -39,7 +34,7 @@ import Tag from "primevue/tag";
 				<template #title>Output Format</template>
 				<template #content>
 					<p class="section-copy">
-						Format selection placeholder for future file generation.
+						Pick the file type you want to generate.
 					</p>
 					<div class="stack-list">
 						<div class="list-row">
@@ -62,7 +57,7 @@ import Tag from "primevue/tag";
 				<template #title>Data Scope</template>
 				<template #content>
 					<p class="section-copy">
-						Source and dataset toggles will live here.
+						Choose which parts of the system to include.
 					</p>
 					<div class="stack-list">
 						<div class="list-row">
@@ -85,8 +80,7 @@ import Tag from "primevue/tag";
 				<template #title>Export Queue</template>
 				<template #content>
 					<p class="section-copy">
-						Future jobs will appear here with progress, download links, and
-						failures.
+						Track current export requests and finished downloads here.
 					</p>
 					<div class="queue-shell">
 						<div class="queue-row">

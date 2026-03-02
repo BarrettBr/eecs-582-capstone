@@ -103,6 +103,9 @@ export const useSystemStore = defineStore("system", () => {
 		],
 	});
 
+	// description: Recounts alert totals from rule-based and ML results.
+	// input: Reads the current event and alert arrays.
+	// output: Updates the active alert metric shown in the UI.
 	function updateActiveAlerts(): void {
 		const ruleAlerts = recentEvents.value.reduce((count, event) => {
 			return count + (event.anomalies?.length ?? 0);
@@ -110,14 +113,23 @@ export const useSystemStore = defineStore("system", () => {
 		metrics.value.activeAlerts = ruleAlerts + mlAlerts.value.length;
 	}
 
+	// description: Converts one ISO timestamp into a short display time.
+	// input: A timestamp string from the backend stream.
+	// output: Returns a local time string for tables and charts.
 	function formatDisplayTime(timestamp: string): string {
 		return new Date(timestamp).toLocaleTimeString();
 	}
 
+	// description: Converts one ISO timestamp into a fuller display string.
+	// input: A timestamp string from the backend stream.
+	// output: Returns a local date-time string for summary fields.
 	function formatDisplayTimestamp(timestamp: string): string {
 		return new Date(timestamp).toLocaleString();
 	}
 
+	// description: Adds cached display timestamps to a temperature event.
+	// input: One raw temperature event from the stream.
+	// output: Returns the normalized event used by the dashboard.
 	function normalizeTempEvent(event: TempEventData): TempEventData {
 		return {
 			...event,
@@ -126,6 +138,9 @@ export const useSystemStore = defineStore("system", () => {
 		};
 	}
 
+	// description: Adds cached display timestamps to a valve event.
+	// input: One raw valve event from the stream.
+	// output: Returns the normalized valve event for display.
 	function normalizeValveEvent(event: ValveEventData): ValveEventData {
 		return {
 			...event,
@@ -134,6 +149,9 @@ export const useSystemStore = defineStore("system", () => {
 		};
 	}
 
+	// description: Adds a cached display time to one ML alert message.
+	// input: One ML alert payload from the stream.
+	// output: Returns the normalized ML alert for UI rendering.
 	function normalizeMLAlert(message: MLAnomalyPayload): MLAnomalyPayload {
 		return {
 			...message,
@@ -141,6 +159,9 @@ export const useSystemStore = defineStore("system", () => {
 		};
 	}
 
+	// description: Rebuilds the reactive chart data from the buffered samples.
+	// input: Reads the current non-reactive chart buffer.
+	// output: Updates chart labels and temperature series in one batch.
 	function flushChartUpdates(): void {
 		const count = chartBuffer.length;
 		const labels = new Array<string>(count);
@@ -164,6 +185,9 @@ export const useSystemStore = defineStore("system", () => {
 		};
 	}
 
+	// description: Schedules a delayed chart refresh to avoid redrawing per event.
+	// input: Uses the local flush timer state.
+	// output: Starts one 250ms timer if none is already pending.
 	function scheduleChartFlush(): void {
 		if (chartFlushTimer !== null) {
 			return;
@@ -174,6 +198,9 @@ export const useSystemStore = defineStore("system", () => {
 		}, CHART_FLUSH_INTERVAL_MS);
 	}
 
+	// description: Stores one temperature event for lists, metrics, and charts.
+	// input: One temperature event from the websocket stream.
+	// output: Updates UI state and schedules the chart refresh.
 	function pushRecentEvent(event: TempEventData): void {
 		const normalized = normalizeTempEvent(event);
 
@@ -192,6 +219,9 @@ export const useSystemStore = defineStore("system", () => {
         updateActiveAlerts();
     }
 
+	// description: Stores one ML alert for the dashboard.
+	// input: One normalized ML payload from the websocket stream.
+	// output: Adds the alert to the list and refreshes metrics.
 	function pushMLAlert(message: MLAnomalyPayload): void {
 		const normalized = normalizeMLAlert(message);
 		mlAlerts.value.unshift(normalized);
@@ -201,6 +231,9 @@ export const useSystemStore = defineStore("system", () => {
 		updateActiveAlerts();
 	}
 
+	// description: Stores one valve event for the valve list and summary metrics.
+	// input: One valve event from the websocket stream.
+	// output: Adds the event to state and updates the metrics block.
 	function pushValveEvent(event: ValveEventData): void {
 		const normalized = normalizeValveEvent(event);
 		recentValveEvents.value.unshift(normalized);
@@ -211,6 +244,9 @@ export const useSystemStore = defineStore("system", () => {
 		updateActiveAlerts();
 	}
 
+	// description: Sends a request that forces the simulator into a fault burst.
+	// input: Uses the current websocket connection and the temp_dev source name.
+	// output: Updates the local fault status based on send success.
 	function injectSimulatorFault(): void {
 		const sent = sendSocket(socket, {
 			kind: "inject_fault",
@@ -223,6 +259,9 @@ export const useSystemStore = defineStore("system", () => {
 		faultStatus.value = sent ? "Injected" : "Failed to send";
 	}
 
+	// description: Routes one websocket batch into the right frontend collections.
+	// input: A parsed websocket batch from the ingest stream.
+	// output: Pushes temperature, valve, or ML messages into store state.
 	function handleStreamMessage(batch: StreamBatch): void {
 		if (batch.kind !== "batch" || !Array.isArray(batch.messages)) {
 			return;
@@ -247,6 +286,9 @@ export const useSystemStore = defineStore("system", () => {
 		}
 	}
 
+	// description: Opens the live websocket stream and attaches listeners.
+	// input: No arguments; uses the configured stream URL.
+	// output: Connects the store to live ingest updates.
 	async function startStream() {
 		if (socket) return; // Prevent duplicate connections
 
@@ -288,6 +330,9 @@ export const useSystemStore = defineStore("system", () => {
 		});
 	}
 
+	// description: Stops the live stream and clears any pending chart timer.
+	// input: No arguments; uses the current socket and timer state.
+	// output: Closes the stream connection and resets local handles.
 	function stopStream() {
 		closeSocket(socket);
 		socket = null;
