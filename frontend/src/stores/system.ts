@@ -77,6 +77,8 @@ export const useSystemStore = defineStore("system", () => {
 	let socket: ManagedWebSocket | null = null;
 	let chartBuffer: TempEventData[] = [];
 	let chartFlushTimer: ReturnType<typeof setTimeout> | null = null;
+	let historicalEventBuffer: TempEventData[] = [];
+	let historicalMLAlertBuffer: MLAnomalyPayload[] = [];
 
 	const status = ref<SystemStatus>({
 		api: "Online",
@@ -204,31 +206,48 @@ export const useSystemStore = defineStore("system", () => {
 	function pushRecentEvent(event: TempEventData): void {
 		const normalized = normalizeTempEvent(event);
 
-        // Strictly keep 8 for the dashboard list
-        recentEvents.value.unshift(normalized);
-        // recentEvents.value = recentEvents.value.slice(0, 8);
+		historicalEventBuffer.unshift(normalized);
 
-        // Keep the latest chart samples buffered and flush chart updates on a timer.
-        chartBuffer.unshift(normalized);
-        chartBuffer = chartBuffer.slice(0, 50);
-        scheduleChartFlush();
+		// Keep the live dashboard list small so UI updates stay cheap over time.
+		recentEvents.value.unshift(normalized);
+		recentEvents.value = recentEvents.value.slice(0, 8);
 
-        metrics.value.totalRecords += 1;
-        metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
-        //console.log("Stream event received", event);
-        updateActiveAlerts();
-    }
+		// Keep the latest chart samples buffered and flush chart updates on a timer.
+		chartBuffer.unshift(normalized);
+		chartBuffer = chartBuffer.slice(0, 50);
+		scheduleChartFlush();
+
+		metrics.value.totalRecords += 1;
+		metrics.value.lastIngest = normalized.display_timestamp ?? formatDisplayTimestamp(normalized.timestamp);
+		//console.log("Stream event received", event);
+		updateActiveAlerts();
+	}
 
 	// description: Stores one ML alert for the dashboard.
 	// input: One normalized ML payload from the websocket stream.
 	// output: Adds the alert to the list and refreshes metrics.
 	function pushMLAlert(message: MLAnomalyPayload): void {
 		const normalized = normalizeMLAlert(message);
+		historicalMLAlertBuffer.unshift(normalized);
 		mlAlerts.value.unshift(normalized);
 		mlAlerts.value = mlAlerts.value.slice(0, 8);
 		status.value.ml = "Receiving";
 		//console.log("ML result received", message);
 		updateActiveAlerts();
+	}
+
+	// description: Returns a frozen copy of the full temperature event history.
+	// input: No arguments; reads the non-reactive history buffer.
+	// output: Returns an array snapshot for the historical table.
+	function getHistoricalEventSnapshot(): TempEventData[] {
+		return historicalEventBuffer.slice();
+	}
+
+	// description: Returns a frozen copy of the full ML alert history.
+	// input: No arguments; reads the non-reactive ML history buffer.
+	// output: Returns an array snapshot for the historical table.
+	function getHistoricalMLAlertSnapshot(): MLAnomalyPayload[] {
+		return historicalMLAlertBuffer.slice();
 	}
 
 	// description: Stores one valve event for the valve list and summary metrics.
@@ -357,6 +376,8 @@ export const useSystemStore = defineStore("system", () => {
 		injectSimulatorFault,
 		startStream,
 		stopStream,
+		getHistoricalEventSnapshot,
+		getHistoricalMLAlertSnapshot,
 		temperatureChartData,
 		chartEvents, 
 	};

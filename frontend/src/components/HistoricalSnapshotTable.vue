@@ -25,8 +25,8 @@ interface MLAlert {
 }
 
 const props = defineProps<{
-	recentEvents: TempEvent[];
-	mlAlerts: MLAlert[];
+	getEventHistorySnapshot: () => TempEvent[];
+	getMLAlertHistorySnapshot: () => MLAlert[];
 }>();
 
 const selectedView = ref("events");
@@ -49,8 +49,8 @@ const currentRows = computed(() => {
 // input: Reads the latest props passed in from the dashboard.
 // output: Updates the snapshot tables and the snapshot timestamp label.
 function refreshSnapshot(): void {
-	snapshotEvents.value = props.recentEvents.slice();
-	snapshotAlerts.value = props.mlAlerts.slice();
+	snapshotEvents.value = props.getEventHistorySnapshot();
+	snapshotAlerts.value = props.getMLAlertHistorySnapshot();
 	snapshotTakenAt.value = new Date().toLocaleTimeString();
 }
 
@@ -60,7 +60,7 @@ onMounted(() => {
 </script>
 
 <template>
-	<Card class="card col-span-full">
+	<Card class="snapshot-card">
 		<template #title>
 			<div class="snapshot-header">
 				<div>
@@ -170,6 +170,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.snapshot-card {
+	padding: 1rem;
+	grid-column: span 12;
+}
+
 .snapshot-header {
 	display: flex;
 	justify-content: space-between;
@@ -192,6 +197,12 @@ onMounted(() => {
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+	.snapshot-card {
+		grid-column: span 12;
+	}
 }
 
 @media (max-width: 767px) {

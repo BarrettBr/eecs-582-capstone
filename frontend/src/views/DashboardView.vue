@@ -191,8 +191,8 @@ function getSocketSeverity(state: string) {
 						:mlAlerts="mlAlerts"
 						/>
 				<HistoricalSnapshotTable
-						:recentEvents="recentEvents"
-						:mlAlerts="mlAlerts"
+						:getEventHistorySnapshot="store.getHistoricalEventSnapshot"
+						:getMLAlertHistorySnapshot="store.getHistoricalMLAlertSnapshot"
 						/>
 			</div>
 		</div>
