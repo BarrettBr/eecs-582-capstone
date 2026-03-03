@@ -65,7 +65,9 @@ onMounted(() => {
 			<div class="snapshot-header">
 				<div>
 					<div class="snapshot-title">Historical Event Log</div>
-					<div class="snapshot-meta">Snapshot taken at {{ snapshotTakenAt }}</div>
+					<div class="snapshot-meta">
+						Snapshot taken at {{ snapshotTakenAt }}
+					</div>
 				</div>
 				<div class="snapshot-controls">
 					<SelectButton
@@ -159,7 +161,7 @@ onMounted(() => {
 
 				<Column header="Labels">
 					<template #body="{ data }">
-						{{ data.labels?.join(', ') || '-' }}
+						{{ data.labels?.join(", ") || "-" }}
 					</template>
 				</Column>
 

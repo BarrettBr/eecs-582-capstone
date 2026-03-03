@@ -25,15 +25,15 @@ const userMenu = ref<InstanceType<typeof Menu> | null>(null);
 const isMobile = ref(window.innerWidth < 1024);
 
 function handleResize() {
-  isMobile.value = window.innerWidth < 1024;
+	isMobile.value = window.innerWidth < 1024;
 }
 
 onMounted(() => {
-  window.addEventListener("resize", handleResize);
+	window.addEventListener("resize", handleResize);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("resize", handleResize);
+	window.removeEventListener("resize", handleResize);
 });
 
 const userMenuItems = [

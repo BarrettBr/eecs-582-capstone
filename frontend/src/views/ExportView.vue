@@ -19,9 +19,7 @@ import Button from "primevue/button";
 			<Card class="feature-card feature-card-wide">
 				<template #title>Export Window</template>
 				<template #content>
-					<p class="section-copy">
-						Choose how much recent data to include.
-					</p>
+					<p class="section-copy">Choose how much recent data to include.</p>
 					<div class="button-row">
 						<Button label="Last Hour" severity="secondary" outlined />
 						<Button label="Last Day" severity="secondary" outlined />
@@ -33,9 +31,7 @@ import Button from "primevue/button";
 			<Card class="feature-card">
 				<template #title>Output Format</template>
 				<template #content>
-					<p class="section-copy">
-						Pick the file type you want to generate.
-					</p>
+					<p class="section-copy">Pick the file type you want to generate.</p>
 					<div class="stack-list">
 						<div class="list-row">
 							<span>PDF summary report</span>
@@ -107,8 +103,7 @@ import Button from "primevue/button";
 	margin-bottom: 1.5rem;
 	padding: 1.5rem;
 	border-radius: 14px;
-	background:
-		linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+	background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
 	border: 1px solid #cbd5e1;
 }
 

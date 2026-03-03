@@ -65,7 +65,12 @@ import Button from "primevue/button";
 					</div>
 					<div class="button-row">
 						<Button label="Add Rule" icon="pi pi-plus" disabled />
-						<Button label="Review Changes" severity="secondary" outlined disabled />
+						<Button
+							label="Review Changes"
+							severity="secondary"
+							outlined
+							disabled
+						/>
 					</div>
 				</template>
 			</Card>
@@ -73,9 +78,7 @@ import Button from "primevue/button";
 			<Card class="feature-card feature-card-wide">
 				<template #title>Service Inputs</template>
 				<template #content>
-					<p class="section-copy">
-						Manage which data sources are active.
-					</p>
+					<p class="section-copy">Manage which data sources are active.</p>
 					<div class="stack-list">
 						<div class="list-row">
 							<span>temp_dev simulator</span>
@@ -92,7 +95,12 @@ import Button from "primevue/button";
 					</div>
 					<div class="button-row">
 						<Button label="Apply Config" icon="pi pi-cog" disabled />
-						<Button label="Reload Sources" severity="secondary" outlined disabled />
+						<Button
+							label="Reload Sources"
+							severity="secondary"
+							outlined
+							disabled
+						/>
 					</div>
 				</template>
 			</Card>
@@ -128,8 +136,7 @@ import Button from "primevue/button";
 	margin-bottom: 1.5rem;
 	padding: 1.5rem;
 	border-radius: 14px;
-	background:
-		linear-gradient(135deg, #f8fafc 0%, #ecfccb 100%);
+	background: linear-gradient(135deg, #f8fafc 0%, #ecfccb 100%);
 	border: 1px solid #bef264;
 }
 

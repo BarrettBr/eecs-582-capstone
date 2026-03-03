@@ -42,11 +42,11 @@ onMounted(() => {
 });
 
 watch(faultStatus, (newValue) => {
-  if (newValue === "Injected") {
-    setTimeout(() => {
-      store.faultStatus = "Idle";
-    }, 2000);
-  }
+	if (newValue === "Injected") {
+		setTimeout(() => {
+			store.faultStatus = "Idle";
+		}, 2000);
+	}
 });
 
 const chartOptions = computed(() => {
@@ -86,19 +86,18 @@ const chartOptions = computed(() => {
 // input: The current websocket status label.
 // output: Returns the severity string used by the status badge.
 function getSocketSeverity(state: string) {
-  switch (state) {
-    case "Connected":
-      return "success";
-    case "Connecting...":
-      return "warning";
-    case "Error":
-    case "Disconnected":
-      return "danger";
-    default:
-      return "info";
-  }
+	switch (state) {
+		case "Connected":
+			return "success";
+		case "Connecting...":
+			return "warning";
+		case "Error":
+		case "Disconnected":
+			return "danger";
+		default:
+			return "info";
+	}
 }
-
 </script>
 
 <template>
@@ -111,39 +110,39 @@ function getSocketSeverity(state: string) {
 					<template #title>System Status</template>
 					<template #content>
 						<div class="status-grid">
-
 							<div class="status-item">
 								<span class="status-label">API</span>
 								<Tag
-										:value="status.api"
-										:severity="status.api === 'Online' ? 'success' : 'danger'"
-										/>
+									:value="status.api"
+									:severity="status.api === 'Online' ? 'success' : 'danger'"
+								/>
 							</div>
 
 							<div class="status-item">
 								<span class="status-label">Ingestion</span>
 								<Tag
-										:value="status.ingestion"
-										:severity="status.ingestion === 'Streaming' ? 'success' : 'danger'"
-										/>
+									:value="status.ingestion"
+									:severity="
+										status.ingestion === 'Streaming' ? 'success' : 'danger'
+									"
+								/>
 							</div>
 
 							<div class="status-item">
 								<span class="status-label">ML Service</span>
 								<Tag
-										:value="status.ml"
-										:severity="status.ml === 'Receiving' ? 'success' : 'danger'"
-										/>
+									:value="status.ml"
+									:severity="status.ml === 'Receiving' ? 'success' : 'danger'"
+								/>
 							</div>
 
 							<div class="status-item">
 								<span class="status-label">Websocket</span>
 								<Tag
-										:value="streamState"
-										:severity="getSocketSeverity(streamState)"
-										/>
+									:value="streamState"
+									:severity="getSocketSeverity(streamState)"
+								/>
 							</div>
-
 						</div>
 					</template>
 				</Card>
@@ -160,57 +159,52 @@ function getSocketSeverity(state: string) {
 					</template>
 				</Card>
 				<Card class="card">
-				<template #title>Metrics</template>
+					<template #title>Metrics</template>
 
-				<template #content>
-					<div class="metrics-grid">
+					<template #content>
+						<div class="metrics-grid">
+							<div class="metric-item">
+								<span class="metric-label">Total Records</span>
+								<span class="metric-value">
+									{{ metrics.totalRecords }}
+								</span>
+							</div>
 
-						<div class="metric-item">
-							<span class="metric-label">Total Records</span>
-							<span class="metric-value">
-								{{ metrics.totalRecords }}
-							</span>
-						</div>
-
-						<div class="metric-item">
-							<span class="metric-label">Active Alerts</span>
-							<Tag
+							<div class="metric-item">
+								<span class="metric-label">Active Alerts</span>
+								<Tag
 									:value="metrics.activeAlerts"
 									:severity="metrics.activeAlerts > 0 ? 'danger' : 'success'"
-									/>
-						</div>
+								/>
+							</div>
 
-						<div class="metric-item">
-							<span class="metric-label">Last Ingest</span>
-							<span class="metric-subtle">
-								{{ metrics.lastIngest }}
-							</span>
-						</div>
+							<div class="metric-item">
+								<span class="metric-label">Last Ingest</span>
+								<span class="metric-subtle">
+									{{ metrics.lastIngest }}
+								</span>
+							</div>
 
-						<div class="metric-actions">
-							<Button
+							<div class="metric-actions">
+								<Button
 									label="Inject Fault"
 									icon="pi pi-exclamation-triangle"
 									severity="warning"
 									@click="injectSimulatorFault"
-									/>
+								/>
 								<Tag
-										:value="faultStatus"
-										:severity="faultStatus === 'Injected' ? 'danger' : 'info'"
-										/>
+									:value="faultStatus"
+									:severity="faultStatus === 'Injected' ? 'danger' : 'info'"
+								/>
+							</div>
 						</div>
-
-					</div>
-				</template>
+					</template>
 				</Card>
-				<EventSwitcherTable
-						:recentEvents="recentEvents"
-						:mlAlerts="mlAlerts"
-						/>
+				<EventSwitcherTable :recentEvents="recentEvents" :mlAlerts="mlAlerts" />
 				<HistoricalSnapshotTable
-						:getEventHistorySnapshot="store.getHistoricalEventSnapshot"
-						:getMLAlertHistorySnapshot="store.getHistoricalMLAlertSnapshot"
-						/>
+					:getEventHistorySnapshot="store.getHistoricalEventSnapshot"
+					:getMLAlertHistorySnapshot="store.getHistoricalMLAlertSnapshot"
+				/>
 			</div>
 		</div>
 	</main>
@@ -227,30 +221,30 @@ function getSocketSeverity(state: string) {
 }
 /* Update your existing grid class */
 .grid {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr); /* Switch to a 12-column base */
-    gap: 1.5rem;
+	display: grid;
+	grid-template-columns: repeat(12, 1fr); /* Switch to a 12-column base */
+	gap: 1.5rem;
 }
 
 /* Define how the cards behave by default */
 .card {
-    padding: 1rem;
-    grid-column: span 12; /* On mobile/small screens, they take full width */
+	padding: 1rem;
+	grid-column: span 12; /* On mobile/small screens, they take full width */
 }
 
 /* Define the spans for larger screens */
 @media (min-width: 768px) {
-    .card {
-        grid-column: span 4; /* Standard cards take 4/12 (3 columns total) */
-    }
-    
-    .col-span-2 {
-        grid-column: span 8 !important; /* Spanning cards take 8/12 (2/3 of the row) */
-    }
+	.card {
+		grid-column: span 4; /* Standard cards take 4/12 (3 columns total) */
+	}
 
-    .col-span-full {
-        grid-column: span 12 !important;
-    }
+	.col-span-2 {
+		grid-column: span 8 !important; /* Spanning cards take 8/12 (2/3 of the row) */
+	}
+
+	.col-span-full {
+		grid-column: span 12 !important;
+	}
 }
 
 .status-list,
@@ -270,52 +264,53 @@ function getSocketSeverity(state: string) {
 }
 
 .metrics-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
 }
 
 .metric-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
 }
 
 .metric-label {
-  font-weight: 500;
-  color: var(--text-color-secondary);
+	font-weight: 500;
+	color: var(--text-color-secondary);
 }
 
 .metric-value {
-  font-size: 1.5rem;
-  font-weight: 600;
+	font-size: 1.5rem;
+	font-weight: 600;
+	font-variant: tabular-nums;
 }
 
 .metric-subtle {
-  font-size: 0.9rem;
-  color: var(--text-color-secondary);
+	font-size: 0.9rem;
+	color: var(--text-color-secondary);
 }
 
 .metric-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
 }
 
 .status-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
 }
 
 .status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
 }
 
 .status-label {
-  font-weight: 500;
-  color: var(--text-color-secondary);
+	font-weight: 500;
+	color: var(--text-color-secondary);
 }
 </style>
