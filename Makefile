@@ -11,7 +11,7 @@ ML_BATCH_FLUSH_INTERVAL ?= 300ms
 deps: web-deps
 
 web-deps:
-	cd web && $(NPM) install
+	cd frontend && $(NPM) install
 
 ingest:
 	cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run .
@@ -20,18 +20,18 @@ ml:
 	$(PYTHON) ml/app/main.py --serve
 
 web:
-	cd web && $(NPM) run dev -- --host
+	cd frontend && $(NPM) run dev -- --host
 
 dev:
 	@trap 'kill 0' INT TERM EXIT; \
 	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & \
 	( $(PYTHON) ml/app/main.py --serve ) & \
-	( cd web && $(NPM) run dev -- --host ) & \
+	( cd frontend && $(NPM) run dev -- --host ) & \
 	wait
 
 dev-modbus:
 	@trap 'kill 0' INT TERM EXIT; \
 	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(MODBUS_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & \
 	( $(PYTHON) ml/app/main.py --serve ) & \
-	( cd web && $(NPM) run dev -- --host ) & \
+	( cd frontend && $(NPM) run dev -- --host ) & \
 	wait

@@ -1,0 +1,77 @@
+---
+services:
+  # ------------------ml------------------
+  ml:
+    build:
+      context: .
+      dockerfile: ./docker/ml/Dockerfile
+    container_name: ml
+    environment:
+      DEBUG: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8000:8000"
+    command:
+      ["python", "main.py", "--serve", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - main-network
+    restart: unless-stopped
+  # ------------------ingest------------------
+  ingest:
+    build:
+      context: .
+      dockerfile: ./docker/ingest/Dockerfile
+    container_name: ingest
+    environment:
+      APP_ENV: development
+      WS_ADDRESS: 0.0.0.0:8080
+
+      LOG_LEVEL: debug
+      ML_API_URL: http://ml:8000
+      ML_BATCH_FLUSH_INTERVAL: 300ms
+      SOURCE_CONFIG_PATH: config/sources.json
+    ports:
+      - "8080:8080"
+    depends_on:
+      ml:
+        condition: service_healthy
+    networks:
+      - main-network
+    restart: unless-stopped
+
+  # ------------------Frontend------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: ./docker/frontend/Dockerfile
+      target: development
+    container_name: frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_INGEST_WS_URL: ws://localhost:8080/ws
+      VITE_APP_NAME: sentinel-dashboard
+      NODE_ENV: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - /app/node_modules
+
+    networks:
+      - main-network
+
+    restart: unless-stopped
+##############################################################################
+# Networks
+##############################################################################
+networks:
+  main-network:
+    driver: bridge
