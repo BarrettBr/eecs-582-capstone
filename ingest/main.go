@@ -46,7 +46,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/BarrettBr/eecs-582-capstone/internal/api"
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
 	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
 	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
@@ -82,8 +81,6 @@ func main() {
 		BatchSize:          appCfg.Stream.BatchSize,
 		BatchFlushInterval: appCfg.Stream.BatchFlushInterval,
 	})
-	historyAPI := api.NewHistoryAPI(appCfg.DB)
-	historyAPI.Register(wsServer.RegisterHTTPHandler)
 	modbusLoop, err := ingest.NewModbusLoop(
 		ingest.Dependencies{
 			DB:       appCfg.DB,
