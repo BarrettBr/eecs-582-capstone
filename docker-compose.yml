@@ -73,6 +73,8 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       VITE_INGEST_WS_URL: ${VITE_INGEST_WS_URL:-ws://localhost:8080/ws}
+      VITE_INGEST_WS_PORT: ${INGEST_PORT:-8080}
+      VITE_INGEST_WS_PATH: ${WS_PATH:-/ws}
       VITE_APP_NAME: ${VITE_APP_NAME:-sentinel-dashboard}
       NODE_ENV: ${NODE_ENV:-development}
     ports:

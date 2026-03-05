@@ -22,7 +22,9 @@ type Config struct {
 
 // Registration contains important registered endpoint paths for logging.
 type Registration struct {
-	PingPath string
+	PingPath    string
+	HistoryPath string
+	ReportPath  string
 }
 
 type apiConfig struct {
@@ -50,8 +52,11 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		registrar.RegisterHTTPHandler(pattern, handler)
 	}
 
+	// Pass back to echo to the server different endpoints
 	return Registration{
-		PingPath: pingPath,
+		PingPath:    pingPath,
+		HistoryPath: historyPath,
+		ReportPath:  reportPath,
 	}
 }
 

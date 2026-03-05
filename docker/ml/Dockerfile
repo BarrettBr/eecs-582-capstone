@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # --- Stage 2: Development ---
-FROM base as development
+FROM base AS development
 
 # Copy over all files in the ml app
 COPY --chown=appuser:appuser ./ml/app/ .

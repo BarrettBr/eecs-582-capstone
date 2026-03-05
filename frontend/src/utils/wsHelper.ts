@@ -59,7 +59,14 @@ export function getDefaultStreamURL(): string {
 
 	const protocol = window.location.protocol === "https:" ? "wss" : "ws";
 	const host = window.location.hostname || "127.0.0.1";
-	return `${protocol}://${host}:8080/ws`;
+	const configuredPort =
+		(import.meta.env.VITE_INGEST_WS_PORT as string | undefined)?.trim() || "8080";
+	const configuredPath =
+		(import.meta.env.VITE_INGEST_WS_PATH as string | undefined)?.trim() || "/ws";
+	const normalizedPath = configuredPath.startsWith("/")
+		? configuredPath
+		: `/${configuredPath}`;
+	return `${protocol}://${host}:${configuredPort}${normalizedPath}`;
 }
 
 // description: Opens a managed websocket and buffers messages until it connects.

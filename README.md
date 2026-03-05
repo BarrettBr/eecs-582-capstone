@@ -50,6 +50,43 @@ Detailed OpenPLC Runtime v4 setup notes and troubleshooting are in:
 
 - `docs/openplc-reference.md`
 
-## Resources
+## How To Start Docker
+
+Copy the example env file once (Or copy paste on windows):
+
+```bash
+cp .env.example .env
+```
+
+Start the full stack (Can do this through docker engine on windows):
+
+```bash
+sudo docker compose up -d --build
+```
+
+Check service status and logs:
+
+```bash
+sudo docker compose ps
+sudo docker compose logs --tail=100 ingest frontend ml
+```
+
+Stop everything:
+
+```bash
+sudo docker compose down
+```
+
+Open the apps:
+
+- Frontend: `http://localhost:5173`
+- Ingest API ping: `http://localhost:8080/api/v1/ping`
+
+If your machine uses legacy Compose instead of `docker compose`, use `docker-compose` with the same commands.
+
+## References
 
 - [Autonomy, OpenPLC downloads](https://autonomylogic.com/runtime)
+- [Docker Engine install docs](https://docs.docker.com/engine/install/)
+- [Docker Compose install docs](https://docs.docker.com/compose/install/)
+- [Podman Compose](https://github.com/containers/podman-compose)
