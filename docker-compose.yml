@@ -29,6 +29,7 @@ services:
     environment:
       APP_ENV: development
       WS_ADDRESS: 0.0.0.0:8080
+      API_BASE_PATH: /api/v1
 
       LOG_LEVEL: debug
       ML_API_URL: http://ml:8000
