@@ -1,9 +1,14 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	_ "modernc.org/sqlite"
 )
 
 type muxRegistrar struct {
@@ -49,7 +54,10 @@ func TestRegisterRoutesPingRejectsMethod(t *testing.T) {
 
 func TestRegisterRoutesHistoryDispatchesToSpecificHandler(t *testing.T) {
 	mux := http.NewServeMux()
-	_ = RegisterRoutes(muxRegistrar{mux: mux}, Config{BasePath: "/api/v1"})
+	_ = RegisterRoutes(muxRegistrar{mux: mux}, Config{
+		BasePath: "/api/v1",
+		Queries:  openAPITestQueries(t),
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/history/temp/hour", nil)
 	rec := httptest.NewRecorder()
@@ -65,7 +73,10 @@ func TestRegisterRoutesHistoryDispatchesToSpecificHandler(t *testing.T) {
 
 func TestRegisterRoutesReportDispatchesToSpecificHandler(t *testing.T) {
 	mux := http.NewServeMux()
-	_ = RegisterRoutes(muxRegistrar{mux: mux}, Config{BasePath: "/api/v1"})
+	_ = RegisterRoutes(muxRegistrar{mux: mux}, Config{
+		BasePath: "/api/v1",
+		Queries:  openAPITestQueries(t),
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/report/valve/week", nil)
 	rec := httptest.NewRecorder()
@@ -74,9 +85,60 @@ func TestRegisterRoutesReportDispatchesToSpecificHandler(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if body := rec.Body.String(); body != "{\"selection\":{\"endpoint\":\"report\",\"kind\":\"valve\",\"window\":\"week\",\"table\":\"valve_samples\",\"group_by\":\"day\",\"range\":\"7d\"},\"items\":[]}" {
-		t.Fatalf("body = %q, want %q", body, "{\"selection\":{\"endpoint\":\"report\",\"kind\":\"valve\",\"window\":\"week\",\"table\":\"valve_samples\",\"group_by\":\"day\",\"range\":\"7d\"},\"items\":[]}")
+	if body := rec.Body.String(); !strings.Contains(body, "\"summary\":") {
+		t.Fatalf("body = %q, want report summary payload", body)
 	}
+}
+
+func openAPITestQueries(t *testing.T) *database.Queries {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	statements := []string{
+		`CREATE TABLE temp_samples (
+			id INTEGER PRIMARY KEY,
+			timestamp INTEGER NOT NULL,
+			sensor_type TEXT NOT NULL,
+			sensor_number INTEGER NOT NULL,
+			fan_on BOOLEAN NOT NULL,
+			temperature REAL NOT NULL,
+			heater_power REAL NOT NULL
+		);`,
+		`CREATE TABLE temp_sample_anomalies (
+			id INTEGER PRIMARY KEY,
+			temp_sample_id INTEGER NOT NULL,
+			anomaly_label TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);`,
+		`CREATE TABLE valve_samples (
+			id INTEGER PRIMARY KEY,
+			timestamp INTEGER NOT NULL,
+			sensor_type TEXT NOT NULL,
+			valve_number INTEGER NOT NULL,
+			is_open BOOLEAN NOT NULL,
+			flow_rate REAL NOT NULL
+		);`,
+		`CREATE TABLE valve_sample_anomalies (
+			id INTEGER PRIMARY KEY,
+			valve_sample_id INTEGER NOT NULL,
+			anomaly_label TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);`,
+	}
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("db.Exec() error = %v", err)
+		}
+	}
+
+	return database.New(db)
 }
 
 func TestRegisterRoutesHistoryRejectsInvalidKind(t *testing.T) {

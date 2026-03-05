@@ -10,7 +10,7 @@ import (
 
 type TempSample struct {
 	ID           int64   `json:"id"`
-	Timestamp    string  `json:"timestamp"`
+	Timestamp    int64   `json:"timestamp"`
 	SensorType   string  `json:"sensor_type"`
 	SensorNumber int64   `json:"sensor_number"`
 	FanOn        bool    `json:"fan_on"`
@@ -34,7 +34,7 @@ type User struct {
 
 type ValveSample struct {
 	ID          int64   `json:"id"`
-	Timestamp   string  `json:"timestamp"`
+	Timestamp   int64   `json:"timestamp"`
 	SensorType  string  `json:"sensor_type"`
 	ValveNumber int64   `json:"valve_number"`
 	IsOpen      bool    `json:"is_open"`

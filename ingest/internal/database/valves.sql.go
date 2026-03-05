@@ -72,7 +72,7 @@ INSERT INTO valve_samples (
 `
 
 type InsertValveSampleParams struct {
-	Timestamp   string  `json:"timestamp"`
+	Timestamp   int64   `json:"timestamp"`
 	SensorType  string  `json:"sensor_type"`
 	ValveNumber int64   `json:"valve_number"`
 	IsOpen      bool    `json:"is_open"`

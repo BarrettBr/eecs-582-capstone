@@ -9,29 +9,36 @@ import (
 	"context"
 )
 
-const getReportSummarySinceUnix = `-- name: GetReportSummarySinceUnix :one
+const getReportSummaryBetweenUnix = `-- name: GetReportSummaryBetweenUnix :one
 WITH
     temp_filtered AS (
         SELECT ts.id, ts.temperature
         FROM temp_samples ts
-        WHERE unixepoch(ts.timestamp) >= CAST(?1 AS INTEGER)
+        WHERE ts.timestamp >= ?1
     ),
     valve_filtered AS (
-        SELECT vs.id, CASE WHEN vs.is_open THEN 1.0 ELSE 0.0 END AS open_rate
+        SELECT vs.id, vs.timestamp, CASE WHEN vs.is_open THEN 1.0 ELSE 0.0 END AS open_rate, vs.is_open
         FROM valve_samples vs
-        WHERE unixepoch(vs.timestamp) >= CAST(?1 AS INTEGER)
+        WHERE vs.timestamp >= ?1
+    ),
+    valve_open_intervals AS (
+        SELECT
+            timestamp AS ts,
+            is_open,
+            LEAD(timestamp, 1, CAST(?2 AS INTEGER)) OVER (ORDER BY timestamp) AS next_ts
+        FROM valve_filtered
     ),
     temp_alerts AS (
         SELECT COUNT(*) AS count
         FROM temp_sample_anomalies ta
         JOIN temp_samples ts ON ts.id = ta.temp_sample_id
-        WHERE unixepoch(ts.timestamp) >= CAST(?1 AS INTEGER)
+        WHERE ts.timestamp >= ?1
     ),
     valve_alerts AS (
         SELECT COUNT(*) AS count
         FROM valve_sample_anomalies va
         JOIN valve_samples vs ON vs.id = va.valve_sample_id
-        WHERE unixepoch(vs.timestamp) >= CAST(?1 AS INTEGER)
+        WHERE vs.timestamp >= ?1
     )
 SELECT
     CAST(COALESCE((SELECT AVG(temperature) FROM temp_filtered), 0) AS REAL) AS avg_temp,
@@ -42,24 +49,34 @@ SELECT
     CAST(COALESCE((SELECT MAX(open_rate) * 100.0 FROM valve_filtered), 0) AS REAL) AS max_valve_open_rate,
     CAST((SELECT count FROM temp_alerts) + (SELECT count FROM valve_alerts) AS INTEGER) AS total_alerts,
     CAST((SELECT count FROM temp_alerts) AS INTEGER) AS temp_anomalies,
-    CAST((SELECT count FROM valve_alerts) AS INTEGER) AS valve_anomalies
+    CAST((SELECT count FROM valve_alerts) AS INTEGER) AS valve_anomalies,
+    CAST(COALESCE((
+        SELECT SUM(CASE WHEN is_open THEN MAX(0, next_ts - ts) ELSE 0 END)
+        FROM valve_open_intervals
+    ), 0) AS INTEGER) AS valve_open_duration_seconds
 `
 
-type GetReportSummarySinceUnixRow struct {
-	AvgTemp          float64 `json:"avg_temp"`
-	MinTemp          float64 `json:"min_temp"`
-	MaxTemp          float64 `json:"max_temp"`
-	AvgValveOpenRate float64 `json:"avg_valve_open_rate"`
-	MinValveOpenRate float64 `json:"min_valve_open_rate"`
-	MaxValveOpenRate float64 `json:"max_valve_open_rate"`
-	TotalAlerts      int64   `json:"total_alerts"`
-	TempAnomalies    int64   `json:"temp_anomalies"`
-	ValveAnomalies   int64   `json:"valve_anomalies"`
+type GetReportSummaryBetweenUnixParams struct {
+	SinceUnix int64 `json:"since_unix"`
+	NowUnix   int64 `json:"now_unix"`
 }
 
-func (q *Queries) GetReportSummarySinceUnix(ctx context.Context, sinceUnix int64) (GetReportSummarySinceUnixRow, error) {
-	row := q.db.QueryRowContext(ctx, getReportSummarySinceUnix, sinceUnix)
-	var i GetReportSummarySinceUnixRow
+type GetReportSummaryBetweenUnixRow struct {
+	AvgTemp                  float64 `json:"avg_temp"`
+	MinTemp                  float64 `json:"min_temp"`
+	MaxTemp                  float64 `json:"max_temp"`
+	AvgValveOpenRate         float64 `json:"avg_valve_open_rate"`
+	MinValveOpenRate         float64 `json:"min_valve_open_rate"`
+	MaxValveOpenRate         float64 `json:"max_valve_open_rate"`
+	TotalAlerts              int64   `json:"total_alerts"`
+	TempAnomalies            int64   `json:"temp_anomalies"`
+	ValveAnomalies           int64   `json:"valve_anomalies"`
+	ValveOpenDurationSeconds int64   `json:"valve_open_duration_seconds"`
+}
+
+func (q *Queries) GetReportSummaryBetweenUnix(ctx context.Context, arg GetReportSummaryBetweenUnixParams) (GetReportSummaryBetweenUnixRow, error) {
+	row := q.db.QueryRowContext(ctx, getReportSummaryBetweenUnix, arg.SinceUnix, arg.NowUnix)
+	var i GetReportSummaryBetweenUnixRow
 	err := row.Scan(
 		&i.AvgTemp,
 		&i.MinTemp,
@@ -70,6 +87,7 @@ func (q *Queries) GetReportSummarySinceUnix(ctx context.Context, sinceUnix int64
 		&i.TotalAlerts,
 		&i.TempAnomalies,
 		&i.ValveAnomalies,
+		&i.ValveOpenDurationSeconds,
 	)
 	return i, err
 }
@@ -87,14 +105,14 @@ SELECT
     CAST(COALESCE(GROUP_CONCAT(ta.anomaly_label), '') AS TEXT) AS anomaly_labels
 FROM temp_samples ts
 LEFT JOIN temp_sample_anomalies ta ON ta.temp_sample_id = ts.id
-WHERE unixepoch(ts.timestamp) >= CAST(?1 AS INTEGER)
+WHERE ts.timestamp >= ?1
 GROUP BY ts.id
-ORDER BY unixepoch(ts.timestamp) DESC
+ORDER BY ts.timestamp DESC
 `
 
 type GetTempHistorySinceUnixRow struct {
 	ID            int64   `json:"id"`
-	Timestamp     string  `json:"timestamp"`
+	Timestamp     int64   `json:"timestamp"`
 	SensorType    string  `json:"sensor_type"`
 	SensorNumber  int64   `json:"sensor_number"`
 	FanOn         bool    `json:"fan_on"`
@@ -149,14 +167,14 @@ SELECT
     CAST(COALESCE(GROUP_CONCAT(va.anomaly_label), '') AS TEXT) AS anomaly_labels
 FROM valve_samples vs
 LEFT JOIN valve_sample_anomalies va ON va.valve_sample_id = vs.id
-WHERE unixepoch(vs.timestamp) >= CAST(?1 AS INTEGER)
+WHERE vs.timestamp >= ?1
 GROUP BY vs.id
-ORDER BY unixepoch(vs.timestamp) DESC
+ORDER BY vs.timestamp DESC
 `
 
 type GetValveHistorySinceUnixRow struct {
 	ID            int64   `json:"id"`
-	Timestamp     string  `json:"timestamp"`
+	Timestamp     int64   `json:"timestamp"`
 	SensorType    string  `json:"sensor_type"`
 	ValveNumber   int64   `json:"valve_number"`
 	IsOpen        bool    `json:"is_open"`

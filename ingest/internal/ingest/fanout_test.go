@@ -127,7 +127,7 @@ func createIngestTables(t *testing.T, db *sql.DB) {
 	statements := []string{
 		`CREATE TABLE temp_samples (
 			id INTEGER PRIMARY KEY,
-			timestamp TEXT NOT NULL,
+			timestamp INTEGER NOT NULL,
 			sensor_type TEXT NOT NULL,
 			sensor_number INTEGER NOT NULL,
 			fan_on BOOLEAN NOT NULL,

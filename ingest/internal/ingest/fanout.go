@@ -275,8 +275,9 @@ func (m *ModbusLoop) deliverSQLBatch(ctx context.Context, batch []fanoutEvent) e
 }
 
 func persistTempSample(ctx context.Context, qtx *database.Queries, sample TempSample) error {
+	timestampUnix := sampleUnixTimestamp(sample.TimestampMs, sample.Timestamp)
 	result, err := qtx.InsertTempSample(ctx, database.InsertTempSampleParams{
-		Timestamp:    sample.Timestamp,
+		Timestamp:    timestampUnix,
 		SensorType:   sample.SensorType,
 		SensorNumber: int64(sample.SensorNumber),
 		FanOn:        sample.FanOn,
@@ -305,8 +306,9 @@ func persistTempSample(ctx context.Context, qtx *database.Queries, sample TempSa
 }
 
 func persistValveSample(ctx context.Context, qtx *database.Queries, sample ValveSample) error {
+	timestampUnix := sampleUnixTimestamp(sample.TimestampMs, sample.Timestamp)
 	result, err := qtx.InsertValveSample(ctx, database.InsertValveSampleParams{
-		Timestamp:   sample.Timestamp,
+		Timestamp:   timestampUnix,
 		SensorType:  sample.SensorType,
 		ValveNumber: int64(sample.ValveNumber),
 		IsOpen:      sample.IsOpen,
@@ -395,4 +397,17 @@ func (m *ModbusLoop) deliverToWebsocket(_ context.Context, event fanoutEvent) er
 
 	m.streamer.PublishEvent(event.record.EventType(), event.payload, timestamp)
 	return nil
+}
+
+func sampleUnixTimestamp(timestampMs int64, timestampRFC3339 string) int64 {
+	if timestampMs > 0 {
+		return timestampMs / 1000
+	}
+	if timestampRFC3339 != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, timestampRFC3339)
+		if err == nil {
+			return parsed.Unix()
+		}
+	}
+	return time.Now().UTC().Unix()
 }

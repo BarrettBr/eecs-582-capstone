@@ -74,7 +74,7 @@ INSERT INTO temp_samples (
 `
 
 type InsertTempSampleParams struct {
-	Timestamp    string  `json:"timestamp"`
+	Timestamp    int64   `json:"timestamp"`
 	SensorType   string  `json:"sensor_type"`
 	SensorNumber int64   `json:"sensor_number"`
 	FanOn        bool    `json:"fan_on"`

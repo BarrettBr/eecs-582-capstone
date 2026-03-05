@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/BarrettBr/eecs-582-capstone/internal/database"
 )
 
 type querySelection struct {
@@ -72,7 +74,7 @@ func buildQuerySelection(endpoint, kind, window string) (querySelection, error) 
 
 type historyEvent struct {
 	ID          int64    `json:"id"`
-	Timestamp   string   `json:"timestamp"`
+	Timestamp   int64    `json:"timestamp"`
 	SensorType  string   `json:"sensor_type"`
 	SourceKind  string   `json:"source_kind"`
 	SourceID    int64    `json:"source_id"`
@@ -86,34 +88,28 @@ type historyEvent struct {
 }
 
 type reportSummary struct {
-	AvgTemp          float64 `json:"avg_temp"`
-	MinTemp          float64 `json:"min_temp"`
-	MaxTemp          float64 `json:"max_temp"`
-	AvgValveOpenRate float64 `json:"avg_valve_open_rate"`
-	MinValveOpenRate float64 `json:"min_valve_open_rate"`
-	MaxValveOpenRate float64 `json:"max_valve_open_rate"`
-	TotalAlerts      int64   `json:"total_alerts"`
-	TempAnomalies    int64   `json:"temp_anomalies"`
-	ValveAnomalies   int64   `json:"valve_anomalies"`
+	AvgTemp                  float64 `json:"avg_temp"`
+	MinTemp                  float64 `json:"min_temp"`
+	MaxTemp                  float64 `json:"max_temp"`
+	AvgValveOpenRate         float64 `json:"avg_valve_open_rate"`
+	MinValveOpenRate         float64 `json:"min_valve_open_rate"`
+	MaxValveOpenRate         float64 `json:"max_valve_open_rate"`
+	TotalAlerts              int64   `json:"total_alerts"`
+	TempAnomalies            int64   `json:"temp_anomalies"`
+	ValveAnomalies           int64   `json:"valve_anomalies"`
+	ValveOpenDurationSeconds int64   `json:"valve_open_duration_seconds"`
 }
 
 func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, selection querySelection) {
-	if cfg.queries == nil {
-		respondWithJSON(w, http.StatusOK, struct {
-			Selection querySelection `json:"selection"`
-			Items     []any          `json:"items"`
-		}{
-			Selection: selection,
-			Items:     []any{},
-		})
-		return
-	}
-
 	ctx := r.Context()
 	sinceUnix := time.Now().UTC().Unix() - selection.Seconds
+	nowUnix := time.Now().UTC().Unix()
 
 	if selection.Endpoint == "report" {
-		summary, err := cfg.queries.GetReportSummarySinceUnix(ctx, sinceUnix)
+		summary, err := cfg.queries.GetReportSummaryBetweenUnix(ctx, database.GetReportSummaryBetweenUnixParams{
+			SinceUnix: sinceUnix,
+			NowUnix:   nowUnix,
+		})
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, "failed report query", err)
 			return
@@ -124,15 +120,16 @@ func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, s
 		}{
 			Selection: selection,
 			Summary: reportSummary{
-				AvgTemp:          summary.AvgTemp,
-				MinTemp:          summary.MinTemp,
-				MaxTemp:          summary.MaxTemp,
-				AvgValveOpenRate: summary.AvgValveOpenRate,
-				MinValveOpenRate: summary.MinValveOpenRate,
-				MaxValveOpenRate: summary.MaxValveOpenRate,
-				TotalAlerts:      summary.TotalAlerts,
-				TempAnomalies:    summary.TempAnomalies,
-				ValveAnomalies:   summary.ValveAnomalies,
+				AvgTemp:                  summary.AvgTemp,
+				MinTemp:                  summary.MinTemp,
+				MaxTemp:                  summary.MaxTemp,
+				AvgValveOpenRate:         summary.AvgValveOpenRate,
+				MinValveOpenRate:         summary.MinValveOpenRate,
+				MaxValveOpenRate:         summary.MaxValveOpenRate,
+				TotalAlerts:              summary.TotalAlerts,
+				TempAnomalies:            summary.TempAnomalies,
+				ValveAnomalies:           summary.ValveAnomalies,
+				ValveOpenDurationSeconds: summary.ValveOpenDurationSeconds,
 			},
 		})
 		return

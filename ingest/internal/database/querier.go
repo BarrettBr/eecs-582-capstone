@@ -14,7 +14,7 @@ type Querier interface {
 	DeleteUsers(ctx context.Context) error
 	GetAllTempSamples(ctx context.Context) ([]TempSample, error)
 	GetAllValveSamples(ctx context.Context) ([]ValveSample, error)
-	GetReportSummarySinceUnix(ctx context.Context, sinceUnix int64) (GetReportSummarySinceUnixRow, error)
+	GetReportSummaryBetweenUnix(ctx context.Context, arg GetReportSummaryBetweenUnixParams) (GetReportSummaryBetweenUnixRow, error)
 	GetTempHistorySinceUnix(ctx context.Context, sinceUnix int64) ([]GetTempHistorySinceUnixRow, error)
 	GetTempSampleByID(ctx context.Context, id int64) (TempSample, error)
 	GetValveHistorySinceUnix(ctx context.Context, sinceUnix int64) ([]GetValveHistorySinceUnixRow, error)
