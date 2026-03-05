@@ -6,15 +6,17 @@ services:
       context: .
       dockerfile: ./docker/ml/Dockerfile
     container_name: ml
+    env_file:
+      - .env
     environment:
-      DEBUG: "true"
+      DEBUG: ${ML_DEBUG:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 5s
       timeout: 5s
       retries: 5
     ports:
-      - "8000:8000"
+      - "${ML_PORT:-8000}:8000"
     command:
       ["python", "main.py", "--serve", "--host", "0.0.0.0", "--port", "8000"]
     networks:
@@ -26,17 +28,32 @@ services:
       context: .
       dockerfile: ./docker/ingest/Dockerfile
     container_name: ingest
+    env_file:
+      - .env
     environment:
-      APP_ENV: development
-      WS_ADDRESS: 0.0.0.0:8080
-      API_BASE_PATH: /api/v1
-
-      LOG_LEVEL: debug
-      ML_API_URL: http://ml:8000
-      ML_BATCH_FLUSH_INTERVAL: 300ms
-      SOURCE_CONFIG_PATH: config/sources.json
+      APP_ENV: ${APP_ENV:-development}
+      WS_ADDRESS: ${WS_ADDRESS:-0.0.0.0:8080}
+      API_BASE_PATH: ${API_BASE_PATH:-/api/v1}
+      WS_PATH: ${WS_PATH:-/ws}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      SQLITE_PATH: ${SQLITE_PATH:-./data/app.db}
+      SQLITE_ENABLE_WAL: ${SQLITE_ENABLE_WAL:-true}
+      SQLITE_SYNCHRONOUS: ${SQLITE_SYNCHRONOUS:-NORMAL}
+      MIGRATIONS_PATH: ${MIGRATIONS_PATH:-sql/schema}
+      SOURCE_CONFIG_PATH: ${SOURCE_CONFIG_PATH:-config/sources.json}
+      VALIDATION_FILE_PATH: ${VALIDATION_FILE_PATH:-config/validation/temperature.json}
+      ML_API_URL: ${ML_API_URL:-http://ml:8000}
+      ML_HTTP_TIMEOUT: ${ML_HTTP_TIMEOUT:-500ms}
+      ML_BATCH_SIZE: ${ML_BATCH_SIZE:-32}
+      ML_BATCH_FLUSH_INTERVAL: ${ML_BATCH_FLUSH_INTERVAL:-300ms}
+      ML_DROP_ON_OVERLOAD: ${ML_DROP_ON_OVERLOAD:-true}
+      WS_BATCH_SIZE: ${WS_BATCH_SIZE:-16}
+      WS_BATCH_FLUSH_INTERVAL: ${WS_BATCH_FLUSH_INTERVAL:-50ms}
+      SQL_BATCH_SIZE: ${SQL_BATCH_SIZE:-256}
+      SQL_BATCH_FLUSH_INTERVAL: ${SQL_BATCH_FLUSH_INTERVAL:-25ms}
+      SQL_NORMAL_SAMPLE_RATE: ${SQL_NORMAL_SAMPLE_RATE:-1}
     ports:
-      - "8080:8080"
+      - "${INGEST_PORT:-8080}:8080"
     depends_on:
       ml:
         condition: service_healthy
@@ -51,15 +68,17 @@ services:
       dockerfile: ./docker/frontend/Dockerfile
       target: development
     container_name: frontend
+    env_file:
+      - .env
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_INGEST_WS_URL: ws://localhost:8080/ws
-      VITE_APP_NAME: sentinel-dashboard
-      NODE_ENV: development
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_INGEST_WS_URL: ${VITE_INGEST_WS_URL:-ws://localhost:8080/ws}
+      VITE_APP_NAME: ${VITE_APP_NAME:-sentinel-dashboard}
+      NODE_ENV: ${NODE_ENV:-development}
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app:Z
       - frontend_node_modules:/app/node_modules
     networks:
       - main-network
