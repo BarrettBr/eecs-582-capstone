@@ -64,30 +64,34 @@ func (cfg *apiConfig) pingHandler(w http.ResponseWriter, _ *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "pong"})
 }
 
-func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
+func respondWithError(w http.ResponseWriter, status_code int, msg string, err error) {
 	if err != nil {
 		log.Println(err)
 	}
-	if code >= http.StatusInternalServerError {
+	if status_code >= http.StatusInternalServerError {
 		log.Printf("Responding with 5XX error: %s", msg)
 	}
 
 	type errorResponse struct {
 		Error string `json:"error"`
 	}
-	respondWithJSON(w, code, errorResponse{
+	respondWithJSON(w, status_code, errorResponse{
 		Error: msg,
 	})
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload any) {
+func respondWithJSON(w http.ResponseWriter, status_code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
+	if payload == nil {
+		return
+	}
+
 	if err != nil {
 		log.Printf("Error marshalling JSON: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(code)
+	w.WriteHeader(status_code)
 	_, _ = w.Write(dat)
 }
