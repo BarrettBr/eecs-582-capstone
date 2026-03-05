@@ -1,8 +1,5 @@
 FROM node:20-alpine AS base
 
-# Install npm
-RUN corepack enable && corepack prepare npm@latest --activate
-
 WORKDIR /app
 
 # ----- Dependencies stage -----
@@ -11,8 +8,8 @@ FROM base AS dependencies
 # Copy package files
 COPY frontend/package.json frontend/package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies deterministically from lockfile.
+RUN npm ci --no-audit --no-fund
 
 FROM base AS development
 
