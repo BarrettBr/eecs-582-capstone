@@ -32,6 +32,8 @@ Known Faults:
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -121,5 +123,24 @@ func TestPublishCopiesPayloadAndDispatchIncomingUsesHandler(t *testing.T) {
 	server.dispatchIncoming(Message{Kind: "custom", Source: "frontend"})
 	if !called {
 		t.Fatalf("expected read handler to be called")
+	}
+}
+
+func TestRegisterHTTPHandlerMountsRouteOnSharedMux(t *testing.T) {
+	server := NewServer(Config{})
+	server.RegisterHTTPHandler("/api/v1/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("pong"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	rec := httptest.NewRecorder()
+	server.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != "pong" {
+		t.Fatalf("body = %q, want %q", body, "pong")
 	}
 }

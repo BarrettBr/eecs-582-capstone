@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
@@ -87,6 +88,18 @@ func loadSettings() (*Config, error) {
 		return nil, err
 	}
 
+	apiBasePath := strings.TrimSpace(getEnv("API_BASE_PATH", "/api/v1"))
+	if apiBasePath == "" {
+		apiBasePath = "/api/v1"
+	}
+	if !strings.HasPrefix(apiBasePath, "/") {
+		apiBasePath = "/" + apiBasePath
+	}
+	apiBasePath = strings.TrimRight(apiBasePath, "/")
+	if apiBasePath == "" {
+		apiBasePath = "/"
+	}
+
 	return &Config{
 		Database: DatabaseConfig{
 			MigrationsPath: getEnv("MIGRATIONS_PATH", "sql/schema"),
@@ -115,6 +128,7 @@ func loadSettings() (*Config, error) {
 		Stream: StreamConfig{
 			Address:            getEnv("WS_ADDRESS", "127.0.0.1:8080"),
 			Path:               getEnv("WS_PATH", "/ws"),
+			APIBasePath:        apiBasePath,
 			BatchSize:          wsBatchSize,
 			BatchFlushInterval: wsBatchFlushInterval,
 		},

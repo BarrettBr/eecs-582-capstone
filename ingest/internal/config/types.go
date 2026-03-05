@@ -58,6 +58,7 @@ type SQLFanoutConfig struct {
 type StreamConfig struct {
 	Address            string
 	Path               string
+	APIBasePath        string
 	BatchSize          int
 	BatchFlushInterval time.Duration
 }

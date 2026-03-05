@@ -46,6 +46,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/BarrettBr/eecs-582-capstone/internal/api"
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
 	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
 	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
@@ -115,6 +116,10 @@ func main() {
 		}
 		log.Printf("Fault injection triggered for source=%q", req.SourceName)
 	})
+	apiRegistration := api.RegisterRoutes(wsServer, api.Config{
+		BasePath: appCfg.Stream.APIBasePath,
+		Queries:  appCfg.Queries,
+	})
 
 	go func() {
 		if err := wsServer.Start(ctx); err != nil {
@@ -123,6 +128,7 @@ func main() {
 	}()
 
 	log.Printf("Modbus service ready. Poll interval: %s", appCfg.Ingest.PollInterval)
+	log.Printf("API ready at http://%s%s", appCfg.Stream.Address, apiRegistration.PingPath)
 	log.Printf("Websocket stream ready at %s", wsServer.URL())
 	if err := modbusLoop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("Error running ingest loop: %v", err)
