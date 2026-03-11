@@ -20,11 +20,13 @@ Local run instructions for both simulator mode and real Modbus/OpenPLC mode are 
 
 ## Quick Start
 
-Install the frontend dependencies once:
+Install dependencies once:
 
 ```bash
 make deps
 ```
+
+`make deps` installs frontend packages and Python ML dependencies into a repo-local `.venv`.
 
 Run the full local stack in simulator mode:
 

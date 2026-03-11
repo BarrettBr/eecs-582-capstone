@@ -10,7 +10,7 @@ This project supports two primary local run modes:
 - Go installed and available as `go`
 - Python 3 installed and available as `python3`
 - Node.js installed (see `web/package.json` for the supported versions)
-- Web dependencies installed once via `make deps` or `cd web && npm install`
+- Dependencies installed once via `make deps`
 
 ## One-Command Launch
 
@@ -57,7 +57,7 @@ Useful manual commands:
 
 ```bash
 cd ingest && SOURCE_CONFIG_PATH=config/sources.json go run .
-python3 ml/app/main.py --serve
+./.venv/bin/python ml/app/main.py --serve
 cd web && npm run dev -- --host
 ```
 
