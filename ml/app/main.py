@@ -14,18 +14,390 @@ Known faults: Small sample sets can reduce cluster count to avoid fit failures
 
 import argparse
 import json
+import os
+import pickle
+import sqlite3
 import sys
+import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-HISTORY_LIMIT = 64
+TEMPERATURE_HISTORY_LIMIT = 512
+VALVE_HISTORY_LIMIT = 128
+HISTORY_LIMITS = {
+	'temperature': TEMPERATURE_HISTORY_LIMIT,
+	'valve': VALVE_HISTORY_LIMIT,
+}
 RECENT_HISTORY = {
 	'temperature': pd.DataFrame(),
 	'valve': pd.DataFrame(),
 }
+
+# Checkpoint directory
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+CHECKPOINT_DIR = os.path.normpath(os.path.join(APP_DIR, '..', 'checkpoints'))
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
+
+class ModelCheckpoint:
+	'''
+	Manages saving and loading model checkpoints for warmup training.
+	'''
+
+	def __init__(self, checkpoint_dir=CHECKPOINT_DIR):
+		self.checkpoint_dir = checkpoint_dir
+		self.models = {
+			'temperature_kmeans': None,
+			'valve_model': None
+		}
+		self.training_state = {
+			'epoch': 0,
+			'samples_processed': 0,
+			'last_checkpoint_time': None,
+			'history_size': {'temperature': 0, 'valve': 0}
+		}
+
+	def save_checkpoint(self, checkpoint_name=None):
+		'''
+		Save current model state and training progress.
+		'''
+		if checkpoint_name is None:
+			timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+			checkpoint_name = f'checkpoint_{timestamp}'
+
+		checkpoint_path = os.path.join(self.checkpoint_dir, f'{checkpoint_name}.pkl')
+
+		checkpoint_data = {
+			'models': self.models,
+			'training_state': self.training_state,
+			'recent_history': RECENT_HISTORY.copy(),
+			'saved_at': datetime.now().isoformat()
+		}
+
+		try:
+			with open(checkpoint_path, 'wb') as f:
+				pickle.dump(checkpoint_data, f)
+			print(f'Checkpoint saved: {checkpoint_path}')
+			return checkpoint_path
+		except Exception as e:
+			print(f'Failed to save checkpoint: {e}')
+			return None
+
+	def load_checkpoint(self, checkpoint_path):
+		'''
+		Load model state and training progress from checkpoint.
+		'''
+		if not os.path.exists(checkpoint_path):
+			print(f'Checkpoint not found: {checkpoint_path}')
+			return False
+
+		try:
+			with open(checkpoint_path, 'rb') as f:
+				checkpoint_data = pickle.load(f)
+
+			self.models = checkpoint_data.get('models', self.models)
+			self.training_state = checkpoint_data.get('training_state', self.training_state)
+
+			# Restore recent history
+			global RECENT_HISTORY
+			RECENT_HISTORY = checkpoint_data.get('recent_history', RECENT_HISTORY)
+
+			saved_at = checkpoint_data.get('saved_at', 'unknown')
+			print(f'Checkpoint loaded: {checkpoint_path} (saved at {saved_at})')
+			return True
+		except Exception as e:
+			print(f'Failed to load checkpoint: {e}')
+			return False
+
+	def get_latest_checkpoint(self):
+		'''
+		Get the most recent checkpoint file.
+		'''
+		if not os.path.exists(self.checkpoint_dir):
+			return None
+
+		checkpoint_files = [f for f in os.listdir(self.checkpoint_dir) if f.endswith('.pkl')]
+		if not checkpoint_files:
+			return None
+
+		# Sort by modification time (newest first)
+		checkpoint_files.sort(key=lambda x: os.path.getmtime(os.path.join(self.checkpoint_dir, x)), reverse=True)
+		return os.path.join(self.checkpoint_dir, checkpoint_files[0])
+
+	def update_training_state(self, samples_processed=0):
+		'''
+		Update training progress counters.
+		'''
+		self.training_state['samples_processed'] += samples_processed
+		self.training_state['last_checkpoint_time'] = datetime.now().isoformat()
+		self.training_state['history_size'] = {
+			'temperature': len(RECENT_HISTORY.get('temperature', pd.DataFrame())),
+			'valve': len(RECENT_HISTORY.get('valve', pd.DataFrame()))
+		}
+
+	def get_status(self):
+		'''
+		Get current training status.
+		'''
+		return {
+			'epoch': self.training_state['epoch'],
+			'samples_processed': self.training_state['samples_processed'],
+			'history_sizes': self.training_state['history_size'],
+			'last_checkpoint': self.training_state['last_checkpoint_time'],
+			'models_loaded': {k: v is not None for k, v in self.models.items()}
+		}
+
+
+# Global checkpoint manager
+checkpoint_manager = ModelCheckpoint()
+
+
+def warmup_from_database(db_path, limit=32, n_clusters=3, outlier_percentile=95):
+	'''
+	Extracts historical data from the ingest service's SQLite database for model warmup.
+	Args:
+		db_path: Path to the SQLite database file.
+		limit: Maximum number of samples to extract per event type.
+	Returns:
+		None. Updates RECENT_HISTORY in place.
+	'''
+	try:
+		conn = sqlite3.connect(db_path)
+		cursor = conn.cursor()
+
+		# Extract temperature samples in chronological order so retained history
+		# mirrors the live stream ordering.
+		cursor.execute('''
+			SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
+			FROM temp_samples
+			ORDER BY timestamp ASC
+			LIMIT ?
+		''', (limit,))
+
+		temp_rows = cursor.fetchall()
+		if temp_rows:
+			temp_samples = []
+			for row in temp_rows:
+				temp_samples.append({
+					'id': row[0],
+					'timestamp': row[1],
+					'sensor_type': row[2],
+					'sensor_number': row[3],
+					'fan_on': bool(row[4]),
+					'temperature': row[5],
+					'heater_power': row[6],
+					'anomalies': []
+				})
+			temp_df = pd.DataFrame(temp_samples)
+			update_recent_history('temperature', temp_df)
+			checkpoint_manager.update_training_state(len(temp_df))
+			refresh_temperature_baseline_model(
+				n_clusters=n_clusters,
+				outlier_percentile=outlier_percentile,
+			)
+			print(f'Loaded {len(temp_df)} temperature samples from database')
+
+		# Extract valve samples in chronological order for consistency.
+		cursor.execute('''
+			SELECT id, timestamp, sensor_type, valve_number, is_open, flow_rate
+			FROM valve_samples
+			ORDER BY timestamp ASC
+			LIMIT ?
+		''', (limit,))
+
+		valve_rows = cursor.fetchall()
+		if valve_rows:
+			valve_samples = []
+			for row in valve_rows:
+				valve_samples.append({
+					'id': row[0],
+					'timestamp': row[1],
+					'sensor_type': row[2],
+					'sensor_number': row[3],
+					'is_open': bool(row[4]),
+					'flow_rate': row[5],
+					'anomalies': []
+				})
+			valve_df = pd.DataFrame(valve_samples)
+			update_recent_history('valve', valve_df)
+			checkpoint_manager.update_training_state(len(valve_df))
+			print(f'Loaded {len(valve_df)} valve samples from database')
+
+		conn.close()
+
+		if not temp_rows and not valve_rows:
+			print('No historical data found in database')
+			return False
+
+		final_checkpoint = checkpoint_manager.save_checkpoint('final_warmup')
+		print(f'Regular warmup completed! Final checkpoint: {final_checkpoint}')
+
+		return True
+
+	except sqlite3.Error as err:
+		print(f'Warning: Failed to load data from database: {err}')
+		return False
+
+
+def gradual_warmup_from_database(
+	db_path,
+	batch_size=10,
+	checkpoint_interval=1000,
+	max_samples=None,
+	n_clusters=3,
+	outlier_percentile=95
+):
+	'''
+	Gradually warmup models from database with checkpointing.
+	Processes data in batches and saves checkpoints periodically.
+	'''
+	print(f'Starting gradual warmup from database: {db_path}')
+	print(f'Batch size: {batch_size}, Checkpoint interval: {checkpoint_interval}')
+
+	try:
+		conn = sqlite3.connect(db_path)
+		cursor = conn.cursor()
+
+		# Get total counts
+		cursor.execute('SELECT COUNT(*) FROM temp_samples')
+		total_temp = cursor.fetchone()[0]
+
+		cursor.execute('SELECT COUNT(*) FROM valve_samples')
+		total_valve = cursor.fetchone()[0]
+
+		print(f'Database contains: {total_temp} temperature samples, {total_valve} valve samples')
+
+		# Process temperature samples in batches
+		if total_temp > 0:
+			limit = max_samples if max_samples else total_temp
+			offset = 0
+
+			while offset < limit:
+				current_batch = min(batch_size, limit - offset)
+
+				cursor.execute('''
+					SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
+					FROM temp_samples
+					ORDER BY timestamp ASC
+					LIMIT ? OFFSET ?
+				''', (current_batch, offset))
+
+				temp_rows = cursor.fetchall()
+				if temp_rows:
+					temp_samples = []
+					for row in temp_rows:
+						temp_samples.append({
+							'id': row[0],
+							'timestamp': row[1],
+							'sensor_type': row[2],
+							'sensor_number': row[3],
+							'fan_on': bool(row[4]),
+							'temperature': row[5],
+							'heater_power': row[6],
+							'anomalies': []
+						})
+
+					temp_df = pd.DataFrame(temp_samples)
+					update_recent_history('temperature', temp_df)
+					refresh_temperature_baseline_model(
+						n_clusters=n_clusters,
+						outlier_percentile=outlier_percentile,
+					)
+
+					# Update training state
+					checkpoint_manager.update_training_state(len(temp_samples))
+
+					print(f'Temperature batch: {offset + len(temp_samples)}/{min(limit, total_temp)} samples')
+
+					# Save checkpoint periodically
+					if (offset + len(temp_samples)) % checkpoint_interval == 0:
+						checkpoint_manager.save_checkpoint()
+
+				offset += current_batch
+
+				# Small delay to prevent overwhelming
+				time.sleep(0.1)
+
+		# Process valve samples in batches
+		if total_valve > 0:
+			limit = max_samples if max_samples else total_valve
+			offset = 0
+
+			while offset < limit:
+				current_batch = min(batch_size, limit - offset)
+
+				cursor.execute('''
+					SELECT id, timestamp, sensor_type, valve_number, is_open, flow_rate
+					FROM valve_samples
+					ORDER BY timestamp ASC
+					LIMIT ? OFFSET ?
+				''', (current_batch, offset))
+
+				valve_rows = cursor.fetchall()
+				if valve_rows:
+					valve_samples = []
+					for row in valve_rows:
+						valve_samples.append({
+							'id': row[0],
+							'timestamp': row[1],
+							'sensor_type': row[2],
+							'sensor_number': row[3],
+							'is_open': bool(row[4]),
+							'flow_rate': row[5],
+							'anomalies': []
+						})
+
+					valve_df = pd.DataFrame(valve_samples)
+					update_recent_history('valve', valve_df)
+
+					# Update training state
+					checkpoint_manager.update_training_state(len(valve_samples))
+
+					print(f'Valve batch: {offset + len(valve_samples)}/{min(limit, total_valve)} samples')
+
+					# Save checkpoint periodically
+					if (offset + len(valve_samples)) % checkpoint_interval == 0:
+						checkpoint_manager.save_checkpoint()
+
+				offset += current_batch
+
+				# Small delay to prevent overwhelming
+				time.sleep(0.1)
+
+		conn.close()
+
+		refresh_temperature_baseline_model(
+			n_clusters=n_clusters,
+			outlier_percentile=outlier_percentile,
+		)
+
+		# Final checkpoint
+		final_checkpoint = checkpoint_manager.save_checkpoint('final_warmup')
+		print(f'Gradual warmup completed! Final checkpoint: {final_checkpoint}')
+
+		return True
+
+	except sqlite3.Error as err:
+		print(f'Database warmup failed: {err}')
+		return False
+
+
+def load_latest_checkpoint():
+	'''
+	Load the most recent checkpoint if available.
+	'''
+	latest_checkpoint = checkpoint_manager.get_latest_checkpoint()
+	if latest_checkpoint:
+		print(f'Found latest checkpoint: {latest_checkpoint}')
+		return checkpoint_manager.load_checkpoint(latest_checkpoint)
+	else:
+		print('No checkpoints found, starting fresh')
+		return False
 
 
 def load_samples_from_json(json_source):
@@ -44,6 +416,90 @@ def load_samples_from_json(json_source):
 		with open(json_source, 'r', encoding='utf-8') as f:
 			data = json.load(f)
 	return dataframe_from_request(data)
+
+
+def prepare_temperature_features(df):
+	'''
+	Extract the temperature feature columns used by the clustering model.
+	Args:
+		df: Temperature sample frame.
+	Returns:
+		DataFrame with normalized feature dtypes ready for scaling.
+	'''
+	features = df.loc[:, ['fan_on', 'temperature', 'heater_power']].copy()
+	features['fan_on'] = features['fan_on'].astype(int)
+	return features
+
+
+def build_temperature_baseline_model(df, n_clusters=3, outlier_percentile=95):
+	'''
+	Fit a reusable temperature baseline model from historical samples only.
+	Args:
+		df: Historical temperature samples.
+		n_clusters: Number of KMeans clusters to fit.
+		outlier_percentile: Percentile threshold derived from baseline distances.
+	Returns:
+		Dictionary describing the fitted baseline, or None if insufficient data.
+	'''
+	if df.empty:
+		return None
+
+	features = prepare_temperature_features(df)
+	if len(features) < 5:
+		return None
+
+	unique_count = len(features.drop_duplicates())
+	if unique_count < 3:
+		return None
+
+	cluster_count = min(max(1, len(features)), n_clusters, unique_count)
+	scaler = StandardScaler()
+	scaled_features = scaler.fit_transform(features)
+	kmeans = KMeans(n_clusters=cluster_count, random_state=42)
+	kmeans.fit(scaled_features)
+	distances = kmeans.transform(scaled_features).min(axis=1)
+	threshold = float(np.percentile(distances, outlier_percentile))
+	return {
+		'kmeans': kmeans,
+		'scaler': scaler,
+		'threshold': threshold,
+		'n_clusters': cluster_count,
+		'baseline_samples': int(len(features)),
+		'outlier_percentile': float(outlier_percentile),
+		'fitted_at': datetime.now().isoformat(),
+	}
+
+
+def refresh_temperature_baseline_model(n_clusters=3, outlier_percentile=95):
+	'''
+	Rebuild the persisted temperature baseline model from retained history.
+	Args:
+		n_clusters: Requested cluster count.
+		outlier_percentile: Percentile used to derive the anomaly threshold.
+	Returns:
+		True when a baseline model is available after refresh.
+	'''
+	history = RECENT_HISTORY.get('temperature', pd.DataFrame())
+	model = build_temperature_baseline_model(
+		history,
+		n_clusters=n_clusters,
+		outlier_percentile=outlier_percentile,
+	)
+	checkpoint_manager.models['temperature_kmeans'] = model
+	return model is not None
+
+
+def temperature_model_is_ready(model_state):
+	'''
+	Validate that a restored temperature checkpoint contains the pieces needed
+	for scoring.
+	Args:
+		model_state: Persisted model payload.
+	Returns:
+		True when the model can score new samples.
+	'''
+	required_keys = {'kmeans', 'scaler', 'threshold'}
+	return isinstance(model_state, dict) and required_keys.issubset(model_state.keys())
 
 
 def dataframe_from_request(data):
@@ -67,11 +523,12 @@ def dataframe_from_request(data):
 	return event_type, pd.DataFrame(samples)
 
 
-def kmeans_anomaly_detection(df, n_clusters=3, outlier_percentile=95):
+def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percentile=95):
 	'''
-	Runs KMeans clustering and flags outliers based on distance to nearest cluster center.
+	Runs KMeans anomaly scoring and flags outliers based on distance to a baseline model.
 	Args:
 		df: DataFrame of TempSample data
+		model_state: Optional persisted baseline model to score against.
 		n_clusters: Number of clusters for KMeans
 		outlier_percentile: Percentile threshold for outlier detection
 	Returns:
@@ -80,39 +537,42 @@ def kmeans_anomaly_detection(df, n_clusters=3, outlier_percentile=95):
 	if df.empty:
 		return df.copy()
 
-	# Trim to relevant features
-	trimmed = df.loc[:, ['fan_on', 'temperature', 'heater_power']].copy()
-
-	# Convert boolean to int for clustering
-	trimmed['fan_on'] = trimmed['fan_on'].astype(int)
+	features = prepare_temperature_features(df)
 
 	# Very small or low-variety batches are not meaningful for clustering and
 	# tend to mark nearly every batch as anomalous. Treat them as "no anomaly".
-	if len(trimmed) < 5:
+	if len(features) < 5 and model_state is None:
 		df = df.copy()
 		df['detected_anomaly'] = 0
 		df['anomaly_score'] = 0.0
 		df['anomaly_label'] = ''
 		return df
 
-	unique_count = len(trimmed.drop_duplicates())
-	if unique_count < 3:
+	unique_count = len(features.drop_duplicates())
+	if unique_count < 3 and model_state is None:
 		df = df.copy()
 		df['detected_anomaly'] = 0
 		df['anomaly_score'] = 0.0
 		df['anomaly_label'] = ''
 		return df
 
-	# Initialize Kmeans Object
-	cluster_count = min(max(1, len(trimmed)), n_clusters, unique_count)
-	kmeans = KMeans(n_clusters=cluster_count, random_state=42)
-	kmeans.fit(trimmed)
+	if not temperature_model_is_ready(model_state):
+		model_state = build_temperature_baseline_model(
+			df,
+			n_clusters=n_clusters,
+			outlier_percentile=outlier_percentile,
+		)
+		if model_state is None:
+			df = df.copy()
+			df['detected_anomaly'] = 0
+			df['anomaly_score'] = 0.0
+			df['anomaly_label'] = ''
+			return df
 
-	# Get distances to nearest cluster center
-	distances = kmeans.transform(trimmed).min(axis=1)
+	scaled_features = model_state['scaler'].transform(features)
+	distances = model_state['kmeans'].transform(scaled_features).min(axis=1)
 
-	# Set threshold for outlier distance
-	threshold = np.percentile(distances, outlier_percentile)
+	threshold = float(model_state.get('threshold', np.percentile(distances, outlier_percentile)))
 
 	# Mark as outlier if distance is at or above threshold
 	df = df.copy()
@@ -228,28 +688,8 @@ def update_recent_history(event_type, df):
 	if event_type not in RECENT_HISTORY:
 		RECENT_HISTORY[event_type] = pd.DataFrame()
 	combined = pd.concat([RECENT_HISTORY[event_type], df.copy()], ignore_index=True)
-	RECENT_HISTORY[event_type] = combined.tail(HISTORY_LIMIT).reset_index(drop=True)
-
-
-def build_temperature_analysis_frame(df):
-	'''
-	Combines recent temperature history with the current batch so KMeans has
-	enough baseline context while only the current rows are reported back.
-	Args:
-		df: Current temperature batch.
-	Returns:
-		DataFrame containing history plus current rows, with a marker column.
-	'''
-	history = RECENT_HISTORY.get('temperature', pd.DataFrame()).copy()
-	if history.empty:
-		current = df.copy()
-		current['__is_current'] = True
-		return current
-
-	history['__is_current'] = False
-	current = df.copy()
-	current['__is_current'] = True
-	return pd.concat([history, current], ignore_index=True)
+	history_limit = HISTORY_LIMITS.get(event_type, TEMPERATURE_HISTORY_LIMIT)
+	RECENT_HISTORY[event_type] = combined.tail(history_limit).reset_index(drop=True)
 
 
 def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
@@ -267,11 +707,20 @@ def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
 	if missing:
 		raise ValueError(f'temperature samples missing fields: {", ".join(missing)}')
 
-	analysis_df = build_temperature_analysis_frame(df)
-	result = kmeans_anomaly_detection(analysis_df, n_clusters=n_clusters, outlier_percentile=outlier_percentile)
-	current_result = result[result['__is_current']].drop(columns=['__is_current'], errors='ignore')
+	model_state = checkpoint_manager.models.get('temperature_kmeans')
+	if not temperature_model_is_ready(model_state):
+		refresh_temperature_baseline_model(n_clusters=n_clusters, outlier_percentile=outlier_percentile)
+		model_state = checkpoint_manager.models.get('temperature_kmeans')
+
+	result = kmeans_anomaly_detection(
+		df,
+		model_state=model_state,
+		n_clusters=n_clusters,
+		outlier_percentile=outlier_percentile,
+	)
 	update_recent_history('temperature', df)
-	return build_anomaly_response(current_result, 'temperature', 'kmeans')
+	refresh_temperature_baseline_model(n_clusters=n_clusters, outlier_percentile=outlier_percentile)
+	return build_anomaly_response(result, 'temperature', 'kmeans')
 
 
 def analyze_valve(df):
@@ -397,13 +846,69 @@ def main():
 	parser.add_argument('--clusters', type=int, default=3, help='Number of KMeans clusters for temperature.')
 	parser.add_argument('--percentile', type=float, default=95, help='Percentile for temperature outlier threshold.')
 	parser.add_argument('--serve', action='store_true', help='Start HTTP API mode instead of CLI file mode.')
-	parser.add_argument('--host', default='127.0.0.1', help='Host for API mode.')
-	parser.add_argument('--port', type=int, default=8000, help='Port for API mode.')
+	parser.add_argument('--warmup-db', help='Path to SQLite database file for extracting historical data for warmup.')
+	parser.add_argument(
+		'--warmup-db-limit',
+		type=int,
+		default=TEMPERATURE_HISTORY_LIMIT,
+		help=f'Maximum number of samples to extract from database per event type (default: {TEMPERATURE_HISTORY_LIMIT}).',
+	)
+	parser.add_argument('--gradual-warmup', action='store_true', help='Enable gradual warmup with checkpointing.')
+	parser.add_argument('--warmup-batch-size', type=int, default=10, help='Batch size for gradual warmup (default: 10).')
+	parser.add_argument('--checkpoint-interval', type=int, default=1000, help='Save checkpoint every N samples (default: 1000).')
+	parser.add_argument('--max-warmup-samples', type=int, help='Maximum samples to process during warmup (optional).')
+	parser.add_argument('--load-checkpoint', help='Load specific checkpoint file.')
+	parser.add_argument('--status', action='store_true', help='Show current training status and exit.')
 	args = parser.parse_args()
+
+	# Always try to load the latest checkpoint on startup (unless specifically loading a different one)
+	if not args.load_checkpoint:
+		load_latest_checkpoint()
+
+	# Handle status request
+	if args.status:
+		status = checkpoint_manager.get_status()
+		print('Current Training Status:')
+		print(f'   Epoch: {status["epoch"]}')
+		print(f'   Samples Processed: {status["samples_processed"]}')
+		print(f'   History Sizes: {status["history_sizes"]}')
+		print(f'   Last Checkpoint: {status["last_checkpoint"]}')
+		print(f'   Models Loaded: {status["models_loaded"]}')
+		return
+
+	# Load specific checkpoint if requested (overrides auto-loading)
+	if args.load_checkpoint:
+		if not checkpoint_manager.load_checkpoint(args.load_checkpoint):
+			print('Failed to load specified checkpoint, continuing without it')
+
+	# Perform gradual warmup if requested
+	if args.gradual_warmup and args.warmup_db:
+		print('Starting gradual warmup with checkpointing...')
+		if not gradual_warmup_from_database(
+			args.warmup_db,
+			batch_size=args.warmup_batch_size,
+			checkpoint_interval=args.checkpoint_interval,
+			max_samples=args.max_warmup_samples,
+			n_clusters=args.clusters,
+			outlier_percentile=args.percentile,
+		):
+			print('Gradual warmup failed')
+		return
+
+	# Perform regular database warmup if specified (but not gradual)
+	if args.warmup_db and not args.gradual_warmup:
+		print(f'Attempting to warmup from database: {args.warmup_db}')
+		if not warmup_from_database(
+			args.warmup_db,
+			args.warmup_db_limit,
+			n_clusters=args.clusters,
+			outlier_percentile=args.percentile,
+		):
+			print('Database warmup failed, continuing without warmup data')
 
 	# Serve used as a "Hey this is in live production" skip over the manual just this testing
 	if args.serve:
-		serve(host=args.host, port=args.port, clusters=args.clusters, percentile=args.percentile)
+		serve(clusters=args.clusters, percentile=args.percentile)
 		return
 
 	if not args.input:
