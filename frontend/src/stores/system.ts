@@ -2,7 +2,7 @@
 // Description: This file acts as a store for the state of the layout (sidebar closed etc)
 // Programmers: Barrett Brown, Adam Berry
 // Creation Date: 3/1
-// Revision Dates:
+// Revision Dates: 3/14 Barrett Brown
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
@@ -49,7 +49,9 @@ export const useSystemStore = defineStore("system", () => {
 	}
 
 	interface TempEventData {
+		event_type?: "temperature";
 		id?: number;
+		service_name?: string;
 		timestamp: string;
 		timestamp_ms?: number;
 		display_time?: string;
@@ -63,7 +65,9 @@ export const useSystemStore = defineStore("system", () => {
 	}
 
 	interface ValveEventData {
+		event_type?: "valve";
 		id?: number;
+		service_name?: string;
 		timestamp: string;
 		timestamp_ms?: number;
 		display_time?: string;
@@ -77,6 +81,7 @@ export const useSystemStore = defineStore("system", () => {
 
 	interface MLAnomalyPayload {
 		schema: string;
+		service_name?: string;
 		event_type: string;
 		generated_at: string;
 		generated_at_ms?: number;
@@ -93,6 +98,34 @@ export const useSystemStore = defineStore("system", () => {
 		total_records?: number;
 	}
 
+	interface ServiceCatalogEntry {
+		name: string;
+		mode: string;
+		event_type: string;
+	}
+
+	interface IngestionStatusResponse {
+		last_reload_at?: string;
+		services?: ServiceCatalogEntry[];
+	}
+
+	interface ServiceCatalogPayload {
+		revision?: string;
+		services?: ServiceCatalogEntry[];
+	}
+
+	interface SubscriptionAckPayload {
+		accepted_services?: string[];
+		rejected_services?: string[];
+		current_services?: string[];
+	}
+
+	interface SubscriptionsPrunedPayload {
+		removed_services?: string[];
+		current_services?: string[];
+		reason?: string;
+	}
+
 	interface ChartBucket {
 		bucketStartMs: number;
 		sum: number;
@@ -104,6 +137,10 @@ export const useSystemStore = defineStore("system", () => {
 	const chartEvents = ref<TempEventData[]>([]);
 	const recentValveEvents = ref<ValveEventData[]>([]);
 	const mlAlerts = ref<MLAnomalyPayload[]>([]);
+	const availableServices = ref<ServiceCatalogEntry[]>([]);
+	const selectedDashboardServices = ref<string[]>([]);
+	const currentSubscriptions = ref<string[]>([]);
+	const focusedServiceName = ref<string | null>(null);
 	const streamState = ref("Connecting...");
 	const faultStatus = ref("Idle");
 	let socket: ManagedWebSocket | null = null;
@@ -116,6 +153,7 @@ export const useSystemStore = defineStore("system", () => {
 	let pendingChartDirty = false;
 	let uiFlushTimer: ReturnType<typeof setTimeout> | null = null;
 	let historicalEventBuffer: TempEventData[] = [];
+	let historicalValveEventBuffer: ValveEventData[] = [];
 	let historicalMLAlertBuffer: MLAnomalyPayload[] = [];
 	let chartShrinkLockedUntilMs = 0;
 
@@ -194,6 +232,7 @@ export const useSystemStore = defineStore("system", () => {
 		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
 		return {
 			...event,
+			event_type: "temperature",
 			timestamp_ms: timestampMs,
 			display_time: formatDisplayTime(timestampMs),
 			display_timestamp: formatDisplayTimestamp(timestampMs),
@@ -207,6 +246,7 @@ export const useSystemStore = defineStore("system", () => {
 		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
 		return {
 			...event,
+			event_type: "valve",
 			timestamp_ms: timestampMs,
 			display_time: formatDisplayTime(timestampMs),
 			display_timestamp: formatDisplayTimestamp(timestampMs),
@@ -226,6 +266,49 @@ export const useSystemStore = defineStore("system", () => {
 			generated_at_ms: generatedAtMs,
 			display_time: formatDisplayTime(generatedAtMs),
 		};
+	}
+
+	function sortServices(services: ServiceCatalogEntry[]): ServiceCatalogEntry[] {
+		return services
+			.slice()
+			.sort((left, right) => left.name.localeCompare(right.name));
+	}
+
+	function applyServiceCatalog(
+		services: ServiceCatalogEntry[],
+		_revision = "",
+	): void {
+		const sortedServices = sortServices(services);
+		const availableServiceNames = new Set(
+			sortedServices.map((service) => service.name),
+		);
+
+		availableServices.value = sortedServices;
+		selectedDashboardServices.value = selectedDashboardServices.value.filter(
+			(serviceName) => availableServiceNames.has(serviceName),
+		);
+		currentSubscriptions.value = currentSubscriptions.value.filter((serviceName) =>
+			availableServiceNames.has(serviceName),
+		);
+
+		if (
+			focusedServiceName.value &&
+			!availableServiceNames.has(focusedServiceName.value)
+		) {
+			focusedServiceName.value = null;
+		}
+
+		if (
+			!focusedServiceName.value &&
+			selectedDashboardServices.value.length === 0 &&
+			sortedServices.length > 0
+		) {
+			selectedDashboardServices.value = sortedServices.map(
+				(service) => service.name,
+			);
+		}
+
+		syncSubscriptions();
 	}
 
 	// description: Loads the persisted ingest totals so the dashboard metric starts from the database count.
@@ -254,6 +337,104 @@ export const useSystemStore = defineStore("system", () => {
 			console.error("Failed to load ingest metrics", error);
 			status.value.api = "Offline";
 		}
+	}
+
+	async function loadAvailableServices(): Promise<void> {
+		try {
+			const response = await fetch(
+				`${getDefaultIngestAPIBaseURL()}/ingestion/status`,
+			);
+			if (!response.ok) {
+				throw new Error(`status ${response.status}`);
+			}
+
+			const payload = (await response.json()) as IngestionStatusResponse;
+			applyServiceCatalog(payload.services ?? [], payload.last_reload_at ?? "");
+			status.value.api = "Online";
+		} catch (error) {
+			console.error("Failed to load service catalog", error);
+			status.value.api = "Offline";
+		}
+	}
+
+	function activeDashboardServices(): string[] {
+		if (focusedServiceName.value) {
+			return [focusedServiceName.value];
+		}
+		return selectedDashboardServices.value.slice();
+	}
+
+	function syncSubscriptions(): void {
+		const desiredServices = activeDashboardServices();
+		if (!socket) {
+			return;
+		}
+		sendSocket(socket, {
+			kind: "set_service_subscriptions",
+			source: "frontend",
+			timestamp: new Date().toISOString(),
+			data: {
+				service_names: desiredServices,
+			},
+		});
+	}
+
+	function resetDashboardData(): void {
+		recentEvents.value = [];
+		chartEvents.value = [];
+		recentValveEvents.value = [];
+		mlAlerts.value = [];
+		metrics.value.activeAlerts = 0;
+		metrics.value.lastIngest = "Waiting for stream";
+		faultStatus.value = "Idle";
+		pendingTempEvents = [];
+		pendingValveEvents = [];
+		pendingMLAlerts = [];
+		pendingRecordDelta = 0;
+		pendingLastIngestLabel = "";
+		pendingChartDirty = false;
+		historicalEventBuffer = [];
+		historicalValveEventBuffer = [];
+		historicalMLAlertBuffer = [];
+		chartBuckets = [];
+		temperatureChartBounds.value = {
+			min: null,
+			max: null,
+		};
+		temperatureChartData.value = {
+			labels: [],
+			datasets: [
+				{
+					...temperatureChartData.value.datasets[0]!,
+					data: [],
+				},
+			],
+		};
+	}
+
+	function setFocusedService(serviceName: string | null): void {
+		const nextServiceName =
+			serviceName && serviceName.trim() !== "" ? serviceName : null;
+		if (focusedServiceName.value === nextServiceName) {
+			return;
+		}
+		focusedServiceName.value = nextServiceName;
+		resetDashboardData();
+		syncSubscriptions();
+	}
+
+	function updateDashboardSubscriptions(serviceNames: string[]): void {
+		const unique = Array.from(
+			new Set(
+				serviceNames.filter((serviceName) =>
+					availableServices.value.some((service) => service.name === serviceName),
+				),
+			),
+		).sort((left, right) => left.localeCompare(right));
+		focusedServiceName.value = null;
+		selectedDashboardServices.value = unique;
+		resetDashboardData();
+		syncSubscriptions();
 	}
 
 	function alignBucketStart(timestampMs: number): number {
@@ -447,8 +628,12 @@ export const useSystemStore = defineStore("system", () => {
 	// description: Returns a frozen copy of the full temperature event history.
 	// input: No arguments; reads the non-reactive history buffer.
 	// output: Returns an array snapshot for the historical table.
-	function getHistoricalEventSnapshot(): TempEventData[] {
-		return historicalEventBuffer.slice();
+	function getHistoricalEventSnapshot(): Array<TempEventData | ValveEventData> {
+		return [...historicalEventBuffer, ...historicalValveEventBuffer]
+			.slice()
+			.sort(
+				(left, right) => (right.timestamp_ms ?? 0) - (left.timestamp_ms ?? 0),
+			);
 	}
 
 	// description: Returns a frozen copy of the full ML alert history.
@@ -501,6 +686,9 @@ export const useSystemStore = defineStore("system", () => {
 		}
 
 		if (hasValveEvents) {
+			for (let index = pendingValveEvents.length - 1; index >= 0; index -= 1) {
+				historicalValveEventBuffer.unshift(pendingValveEvents[index]!);
+			}
 			recentValveEvents.value = prependNewestFirst(
 				recentValveEvents.value,
 				pendingValveEvents,
@@ -570,9 +758,35 @@ export const useSystemStore = defineStore("system", () => {
 		let lastIngestLabel = "";
 
 		for (const message of batch.messages) {
+			if (message.kind === "service_catalog") {
+				const payload = message.data as ServiceCatalogPayload;
+				applyServiceCatalog(payload.services ?? [], payload.revision ?? "");
+				continue;
+			}
+			if (message.kind === "subscription_ack") {
+				const payload = message.data as SubscriptionAckPayload;
+				currentSubscriptions.value = payload.current_services?.slice() ?? [];
+				if (!focusedServiceName.value) {
+					selectedDashboardServices.value =
+						payload.current_services?.slice() ?? [];
+				}
+				continue;
+			}
+			if (message.kind === "subscriptions_pruned") {
+				const payload = message.data as SubscriptionsPrunedPayload;
+				currentSubscriptions.value = payload.current_services?.slice() ?? [];
+				if (!focusedServiceName.value) {
+					selectedDashboardServices.value =
+						payload.current_services?.slice() ?? [];
+				}
+				continue;
+			}
 			if (message.kind === "event") {
 				if (message.event_type === "temperature") {
-					const normalized = normalizeTempEvent(message.data as TempEventData);
+					const normalized = normalizeTempEvent({
+						...(message.data as TempEventData),
+						service_name: message.service_name,
+					});
 					pendingTempEvents.push(normalized);
 					batchRecordDelta += 1;
 					pendingChartDirty = true;
@@ -585,9 +799,10 @@ export const useSystemStore = defineStore("system", () => {
 					continue;
 				}
 				if (message.event_type === "valve") {
-					const normalized = normalizeValveEvent(
-						message.data as ValveEventData,
-					);
+					const normalized = normalizeValveEvent({
+						...(message.data as ValveEventData),
+						service_name: message.service_name,
+					});
 					pendingValveEvents.push(normalized);
 					batchRecordDelta += 1;
 					if ((normalized.timestamp_ms ?? 0) >= lastIngestMs) {
@@ -601,7 +816,10 @@ export const useSystemStore = defineStore("system", () => {
 			}
 			if (message.kind === "ml_result") {
 				pendingMLAlerts.push(
-					normalizeMLAlert(message.data as MLAnomalyPayload),
+					normalizeMLAlert({
+						...(message.data as MLAnomalyPayload),
+						service_name: message.service_name,
+					}),
 				);
 			}
 		}
@@ -619,7 +837,7 @@ export const useSystemStore = defineStore("system", () => {
 	async function startStream() {
 		if (socket) return; // Prevent duplicate connections
 
-		await loadInitialMetrics();
+		await Promise.all([loadInitialMetrics(), loadAvailableServices()]);
 
 		const streamURL = getDefaultStreamURL();
 		console.log("Attempting websocket connection", streamURL);
@@ -630,6 +848,7 @@ export const useSystemStore = defineStore("system", () => {
 			streamState.value = "Connected";
 			status.value.ingestion = "Streaming";
 			status.value.ml = "Listening";
+			syncSubscriptions();
 			loading.value = false;
 		});
 
@@ -678,13 +897,20 @@ export const useSystemStore = defineStore("system", () => {
 		recentEvents,
 		recentValveEvents,
 		mlAlerts,
+		availableServices,
+		selectedDashboardServices,
+		currentSubscriptions,
+		focusedServiceName,
 		streamState,
 		faultStatus,
 		status,
 		metrics,
 		injectSimulatorFault,
+		loadAvailableServices,
 		startStream,
 		stopStream,
+		setFocusedService,
+		updateDashboardSubscriptions,
 		getHistoricalEventSnapshot,
 		getHistoricalMLAlertSnapshot,
 		temperatureChartData,

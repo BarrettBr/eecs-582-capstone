@@ -7,16 +7,23 @@ import SelectButton from "primevue/selectbutton";
 import Card from "primevue/card";
 import Button from "primevue/button";
 
-interface TempEvent {
+interface EventSnapshotRow {
+	service_name?: string;
 	timestamp: string;
+	timestamp_ms?: number;
 	display_time?: string;
 	sensor_number?: number;
 	temperature?: number;
 	fan_on?: boolean;
+	valve_number?: number;
+	flow_rate?: number;
+	is_open?: boolean;
 	anomalies?: string[];
+	event_type?: "temperature" | "valve";
 }
 
 interface MLAlert {
+	service_name?: string;
 	generated_at: string;
 	display_time?: string;
 	has_anomaly: boolean;
@@ -24,13 +31,25 @@ interface MLAlert {
 	score?: number;
 }
 
+interface HistoricalEventRow {
+	timestamp: string;
+	timestamp_ms?: number;
+	display_time?: string;
+	service_name?: string;
+	source_label: string;
+	reading_label: string;
+	state_label: string;
+	state_severity: "success" | "secondary";
+	alerts: string[];
+}
+
 const props = defineProps<{
-	getEventHistorySnapshot: () => TempEvent[];
+	getEventHistorySnapshot: () => EventSnapshotRow[];
 	getMLAlertHistorySnapshot: () => MLAlert[];
 }>();
 
 const selectedView = ref("events");
-const snapshotEvents = ref<TempEvent[]>([]);
+const snapshotEvents = ref<HistoricalEventRow[]>([]);
 const snapshotAlerts = ref<MLAlert[]>([]);
 const snapshotTakenAt = ref("No snapshot yet");
 
@@ -45,11 +64,42 @@ const currentRows = computed(() => {
 		: snapshotAlerts.value;
 });
 
-// description: Captures a frozen copy of the current event and alert lists.
-// input: Reads the latest props passed in from the dashboard.
-// output: Updates the snapshot tables and the snapshot timestamp label.
+function normalizeHistoricalEventRows(
+	events: EventSnapshotRow[],
+): HistoricalEventRow[] {
+	return events.map((event) => {
+		if (event.event_type === "valve") {
+			return {
+				timestamp: event.timestamp,
+				timestamp_ms: event.timestamp_ms,
+				display_time: event.display_time,
+				service_name: event.service_name,
+				source_label: `Valve ${event.valve_number ?? "-"}`,
+				reading_label: `${event.flow_rate ?? "n/a"} L/m`,
+				state_label: event.is_open ? "Open" : "Closed",
+				state_severity: event.is_open ? "success" : "secondary",
+				alerts: event.anomalies ?? [],
+			};
+		}
+
+		return {
+			timestamp: event.timestamp,
+			timestamp_ms: event.timestamp_ms,
+			display_time: event.display_time,
+			service_name: event.service_name,
+			source_label: `Sensor ${event.sensor_number ?? "-"}`,
+			reading_label: `${event.temperature ?? "n/a"} °C`,
+			state_label: event.fan_on ? "Fan On" : "Fan Off",
+			state_severity: event.fan_on ? "success" : "secondary",
+			alerts: event.anomalies ?? [],
+		};
+	});
+}
+
 function refreshSnapshot(): void {
-	snapshotEvents.value = props.getEventHistorySnapshot();
+	snapshotEvents.value = normalizeHistoricalEventRows(
+		props.getEventHistorySnapshot(),
+	);
 	snapshotAlerts.value = props.getMLAlertHistorySnapshot();
 	snapshotTakenAt.value = new Date().toLocaleTimeString();
 }
@@ -105,19 +155,17 @@ onMounted(() => {
 					</template>
 				</Column>
 
-				<Column field="sensor_number" header="Sensor" sortable />
+				<Column field="service_name" header="Service" sortable />
 
-				<Column field="temperature" header="Temperature" sortable>
-					<template #body="{ data }">
-						{{ data.temperature ?? "n/a" }} °C
-					</template>
-				</Column>
+				<Column field="source_label" header="Source" />
 
-				<Column header="Fan">
+				<Column field="reading_label" header="Reading" />
+
+				<Column header="State">
 					<template #body="{ data }">
 						<Tag
-							:value="data.fan_on ? 'ON' : 'OFF'"
-							:severity="data.fan_on ? 'success' : 'secondary'"
+							:value="data.state_label"
+							:severity="data.state_severity"
 						/>
 					</template>
 				</Column>
@@ -125,8 +173,8 @@ onMounted(() => {
 				<Column header="Alerts">
 					<template #body="{ data }">
 						<Tag
-							v-if="data.anomalies?.length"
-							:value="data.anomalies.join(', ')"
+							v-if="data.alerts.length"
+							:value="data.alerts.join(', ')"
 							severity="danger"
 						/>
 						<span v-else>-</span>
@@ -149,6 +197,8 @@ onMounted(() => {
 						{{ data.display_time ?? data.generated_at }}
 					</template>
 				</Column>
+
+				<Column field="service_name" header="Service" sortable />
 
 				<Column header="Anomaly">
 					<template #body="{ data }">

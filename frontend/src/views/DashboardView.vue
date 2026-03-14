@@ -1,8 +1,8 @@
 <!-- Name: Dashboard.vue
 Description: The component for creating the dashboard
-Programmers: Adam Berry 
+Programmers: Adam Berry
 Creation Date: 2/14
-Revision Dates: Adam Berry 2/14, Adam Berry 2/15, Barret Brown 3/1, Adam Berry 3/1
+Revision Dates: Adam Berry 2/14, Adam Berry 2/15, Barret Brown 3/1, Adam Berry 3/1, Barrett Brown 3/14
 Preconditions: Not Relevant
 Postconditions: Not Relevant
 Error Types: Not Relevant
@@ -10,24 +10,33 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
+import { useRoute, useRouter } from "vue-router";
 import { useSystemStore } from "@/stores/system";
 import Chart from "primevue/chart";
 import Card from "primevue/card";
 import Tag from "primevue/tag";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
+import MultiSelect from "primevue/multiselect";
 import EventSwitcherTable from "@/components/EventSwitcherTable.vue";
 import HistoricalSnapshotTable from "@/components/HistoricalSnapshotTable.vue";
 
 const store = useSystemStore();
+const route = useRoute();
+const router = useRouter();
+const subscribeDialogVisible = ref(false);
+const pendingServiceSelection = ref<string[]>([]);
 
-// load the variable names in the expected way
 const {
 	loading,
+	availableServices,
 	recentEvents,
 	recentValveEvents,
 	mlAlerts,
+	currentSubscriptions,
+	selectedDashboardServices,
 	streamState,
 	faultStatus,
 	status,
@@ -35,11 +44,94 @@ const {
 	temperatureChartBounds,
 } = storeToRefs(store);
 
-const { injectSimulatorFault } = store;
+const {
+	injectSimulatorFault,
+	setFocusedService,
+	updateDashboardSubscriptions,
+} = store;
 
 onMounted(() => {
 	store.startStream();
 });
+
+const currentServiceName = computed(() => {
+	const raw = route.params.serviceName;
+	return typeof raw === "string" && raw.trim() !== "" ? raw : null;
+});
+
+const isServiceDashboard = computed(() => currentServiceName.value !== null);
+
+const currentService = computed(() => {
+	return (
+		availableServices.value.find(
+			(service) => service.name === currentServiceName.value,
+		) ?? null
+	);
+});
+
+const serviceOptions = computed(() =>
+	availableServices.value.map((service) => ({
+		label: `${service.name} (${service.event_type})`,
+		value: service.name,
+	})),
+);
+
+const dashboardTitle = computed(() => {
+	if (!currentService.value) {
+		return "Dashboard";
+	}
+	return `${currentService.value.name} Dashboard`;
+});
+
+const dashboardSubtitle = computed(() => {
+	if (isServiceDashboard.value) {
+		return "Mini-dashboard for one service.";
+	}
+	return "Overview dashboard for the currently selected services.";
+});
+
+const activeServiceSummary = computed(() => {
+	if (currentSubscriptions.value.length === 0) {
+		return "No subscribed services";
+	}
+	return currentSubscriptions.value.join(", ");
+});
+
+const canInjectFault = computed(() => {
+	if (currentServiceName.value) {
+		return currentServiceName.value === "temp_dev";
+	}
+	return currentSubscriptions.value.includes("temp_dev");
+});
+
+const chartTitle = computed(() => {
+	if (currentService.value?.event_type === "valve") {
+		return "Live Flow (temperature chart unavailable for valve view)";
+	}
+	return "Live Temperature";
+});
+
+watch(
+	currentServiceName,
+	(serviceName) => {
+		setFocusedService(serviceName);
+	},
+	{ immediate: true },
+);
+
+watch(
+	[currentServiceName, availableServices],
+	([serviceName, services]) => {
+		if (
+			serviceName &&
+			services.length > 0 &&
+			!services.some((service) => service.name === serviceName)
+		) {
+			router.replace("/dashboard");
+		}
+	},
+	{ immediate: true },
+);
 
 watch(faultStatus, (newValue) => {
 	if (newValue === "Injected") {
@@ -82,9 +174,6 @@ const chartOptions = computed(() => {
 	};
 });
 
-// description: Maps the websocket state into a tag severity.
-// input: The current websocket status label.
-// output: Returns the severity string used by the status badge.
 function getSocketSeverity(state: string) {
 	switch (state) {
 		case "Connected":
@@ -98,16 +187,46 @@ function getSocketSeverity(state: string) {
 			return "info";
 	}
 }
+
+function openSubscribeDialog() {
+	pendingServiceSelection.value = selectedDashboardServices.value.slice();
+	subscribeDialogVisible.value = true;
+}
+
+function applySubscriptions() {
+	updateDashboardSubscriptions(pendingServiceSelection.value);
+	subscribeDialogVisible.value = false;
+}
 </script>
 
 <template>
 	<main>
 		<div class="dashboard">
+			<div class="dashboard-header">
+				<div>
+					<h1 class="dashboard-title">{{ dashboardTitle }}</h1>
+					<p class="dashboard-subtitle">{{ dashboardSubtitle }}</p>
+				</div>
+			</div>
+
 			<div v-if="loading" class="loading">Loading system data...</div>
 
 			<div v-else class="grid">
 				<Card class="card">
-					<template #title>System Status</template>
+					<template #title>
+						<div class="card-title-row">
+							<span>System Status</span>
+							<Button
+								v-if="!isServiceDashboard"
+								label="Subscribe"
+								icon="pi pi-plus"
+								size="small"
+								severity="secondary"
+								outlined
+								@click="openSubscribeDialog"
+							/>
+						</div>
+					</template>
 					<template #content>
 						<div class="status-grid">
 							<div class="status-item">
@@ -144,11 +263,15 @@ function getSocketSeverity(state: string) {
 								/>
 							</div>
 						</div>
+						<div class="service-summary">
+							<div class="service-summary-label">Active Services</div>
+							<div class="service-summary-value">{{ activeServiceSummary }}</div>
+						</div>
 					</template>
 				</Card>
 
 				<Card class="card col-span-2">
-					<template #title>Live Temperature</template>
+					<template #title>{{ chartTitle }}</template>
 					<template #content>
 						<Chart
 							type="line"
@@ -158,9 +281,9 @@ function getSocketSeverity(state: string) {
 						/>
 					</template>
 				</Card>
+
 				<Card class="card">
 					<template #title>Metrics</template>
-
 					<template #content>
 						<div class="metrics-grid">
 							<div class="metric-item">
@@ -185,7 +308,7 @@ function getSocketSeverity(state: string) {
 								</span>
 							</div>
 
-							<div class="metric-actions">
+							<div v-if="canInjectFault" class="metric-actions">
 								<Button
 									label="Inject Fault"
 									icon="pi pi-exclamation-triangle"
@@ -200,13 +323,50 @@ function getSocketSeverity(state: string) {
 						</div>
 					</template>
 				</Card>
-				<EventSwitcherTable :recentEvents="recentEvents" :mlAlerts="mlAlerts" />
+
+				<EventSwitcherTable
+					:recentEvents="recentEvents"
+					:recentValveEvents="recentValveEvents"
+					:mlAlerts="mlAlerts"
+				/>
+
 				<HistoricalSnapshotTable
 					:getEventHistorySnapshot="store.getHistoricalEventSnapshot"
 					:getMLAlertHistorySnapshot="store.getHistoricalMLAlertSnapshot"
 				/>
 			</div>
 		</div>
+
+		<Dialog
+			v-model:visible="subscribeDialogVisible"
+			modal
+			header="Select Services"
+			:style="{ width: '30rem', maxWidth: '90vw' }"
+		>
+			<div class="subscribe-dialog">
+				<p class="subscribe-copy">
+					Choose the services you want shown on the overview dashboard.
+				</p>
+				<MultiSelect
+					v-model="pendingServiceSelection"
+					:options="serviceOptions"
+					optionLabel="label"
+					optionValue="value"
+					placeholder="Select services"
+					display="chip"
+					class="subscribe-select"
+				/>
+				<div class="subscribe-actions">
+					<Button
+						label="Cancel"
+						severity="secondary"
+						text
+						@click="subscribeDialogVisible = false"
+					/>
+					<Button label="Apply" @click="applySubscriptions" />
+				</div>
+			</div>
+		</Dialog>
 	</main>
 </template>
 
@@ -215,31 +375,38 @@ function getSocketSeverity(state: string) {
 	padding: 2rem;
 }
 
+.dashboard-header {
+	margin-bottom: 1.25rem;
+}
+
 .dashboard-title {
-	margin-bottom: 1.5rem;
+	margin: 0;
 	color: black;
 }
-/* Update your existing grid class */
+
+.dashboard-subtitle {
+	margin: 0.35rem 0 0;
+	color: var(--p-surface-500);
+}
+
 .grid {
 	display: grid;
-	grid-template-columns: repeat(12, 1fr); /* Switch to a 12-column base */
+	grid-template-columns: repeat(12, 1fr);
 	gap: 1.5rem;
 }
 
-/* Define how the cards behave by default */
 .card {
 	padding: 1rem;
-	grid-column: span 12; /* On mobile/small screens, they take full width */
+	grid-column: span 12;
 }
 
-/* Define the spans for larger screens */
 @media (min-width: 768px) {
 	.card {
-		grid-column: span 4; /* Standard cards take 4/12 (3 columns total) */
+		grid-column: span 4;
 	}
 
 	.col-span-2 {
-		grid-column: span 8 !important; /* Spanning cards take 8/12 (2/3 of the row) */
+		grid-column: span 8 !important;
 	}
 
 	.col-span-full {
@@ -247,16 +414,11 @@ function getSocketSeverity(state: string) {
 	}
 }
 
-.status-list,
-.metrics-list {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-}
-
-.status-list li,
-.metrics-list li {
-	margin-bottom: 0.5rem;
+.card-title-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
 }
 
 .loading {
@@ -289,6 +451,7 @@ function getSocketSeverity(state: string) {
 .metric-subtle {
 	font-size: 0.9rem;
 	color: var(--text-color-secondary);
+	text-align: right;
 }
 
 .metric-actions {
@@ -312,5 +475,42 @@ function getSocketSeverity(state: string) {
 .status-label {
 	font-weight: 500;
 	color: var(--text-color-secondary);
+}
+
+.service-summary {
+	margin-top: 1.25rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--p-surface-200);
+}
+
+.service-summary-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--p-surface-500);
+}
+
+.service-summary-value {
+	margin-top: 0.35rem;
+	line-height: 1.5;
+}
+
+.subscribe-dialog {
+	display: grid;
+	gap: 1rem;
+}
+
+.subscribe-copy {
+	margin: 0;
+	color: var(--p-surface-600);
+}
+
+.subscribe-select {
+	width: 100%;
+}
+
+.subscribe-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.75rem;
 }
 </style>

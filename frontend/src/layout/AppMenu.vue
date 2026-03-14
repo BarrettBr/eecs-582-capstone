@@ -1,9 +1,10 @@
 <!-- Name: App Menu
 Description: This file holds the top level creator for the sidebar used for navigation
-Programmers: Adam Berry 
+Programmers: Adam Berry
 Creation Date: 2/25
-Revision Dates: 
+Revision Dates:
 - 2026-03-01, Barrett Brown: Updated /Dashboard redirect to /dashboard to match with rest of code
+- 2026-03-14, Barrett Brown: Added dynamic service menu entries backed by the live service catalog.
 3/1 adam berry reformat style
 Preconditions: Not Relevant
 Postconditions: Not Relevant
@@ -12,10 +13,38 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
+import { computed, onMounted } from "vue";
+import { storeToRefs } from "pinia";
+import { useSystemStore } from "@/stores/system";
 import AppMenuItem from "./AppMenuItem.vue";
 import type { MenuItem } from "./AppMenuItem.vue";
 
-const allItems: MenuItem[] = [
+const store = useSystemStore();
+const { availableServices } = storeToRefs(store);
+
+onMounted(() => {
+	store.loadAvailableServices();
+});
+
+const serviceItems = computed<MenuItem[]>(() => {
+	if (availableServices.value.length === 0) {
+		return [
+			{
+				label: "No services yet",
+				icon: "pi pi-circle-off",
+				to: "/dashboard",
+			},
+		];
+	}
+
+	return availableServices.value.map((service) => ({
+		label: service.name,
+		icon: "pi pi-chart-line",
+		to: `/services/${service.name}`,
+	}));
+});
+
+const allItems = computed<MenuItem[]>(() => [
 	{
 		label: "Dashboard",
 		icon: "pi pi-home",
@@ -33,6 +62,11 @@ const allItems: MenuItem[] = [
 	},
 	{ separator: true },
 	{
+		label: "Services",
+		icon: "pi pi-bars",
+		items: serviceItems.value,
+	},
+	{
 		label: "Other",
 		icon: "pi pi-bars",
 		items: [
@@ -43,7 +77,7 @@ const allItems: MenuItem[] = [
 			},
 		],
 	},
-];
+]);
 </script>
 
 <template>

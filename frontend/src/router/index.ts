@@ -2,7 +2,7 @@
 //Description: Used to configure the routes to convert from a URL to a view component for App.vue
 //Programmers: Adam Berry
 //Creation Date: 2/14
-//Revision Dates: Adam Berry 2/14, Adam Berry 2/15
+//Revision Dates: Adam Berry 2/14, Adam Berry 2/15, Barrett Brown 3/14
 //Preconditions: Not Relevant
 //Postconditions: Not Relevant
 //Error Types: Not Relevant
@@ -41,6 +41,11 @@ const router = createRouter({
 				{
 					path: "/dashboard",
 					name: "dashboard",
+					component: DashboardView,
+				},
+				{
+					path: "/services/:serviceName",
+					name: "service-dashboard",
 					component: DashboardView,
 				},
 				{

@@ -10,7 +10,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRoute, RouterLink } from "vue-router";
 import { useLayoutStore } from "@/stores/layout";
 
@@ -33,6 +33,21 @@ const open = ref(false);
 const hasChildren = computed(() => !!props.item.items?.length);
 const isActive = computed(() =>
 	props.item.to ? route.path.startsWith(props.item.to) : false,
+);
+const hasActiveChild = computed(() =>
+	props.item.items?.some((child) =>
+		child.to ? route.path.startsWith(child.to) : false,
+	) ?? false,
+);
+
+watch(
+	hasActiveChild,
+	(isNowActive) => {
+		if (isNowActive) {
+			open.value = true;
+		}
+	},
+	{ immediate: true },
 );
 
 // description: Opens or closes a nested menu section.
