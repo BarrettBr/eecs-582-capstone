@@ -145,23 +145,10 @@ func TestHandleSetSubscriptionsValidatesAndReplacesRoomMembership(t *testing.T) 
 	server.validServices["svc_b"] = struct{}{}
 	server.roomMembers["svc_old"] = map[*client]struct{}{testClient: {}}
 
-	response := make(chan subscriptionAckPayload, 1)
 	server.handleSetSubscriptions(setSubscriptionsRequest{
 		client:    testClient,
 		requested: []string{"svc_a", "svc_a", "svc_missing"},
-		response:  response,
 	})
-
-	ack := <-response
-	if len(ack.AcceptedServices) != 1 || ack.AcceptedServices[0] != "svc_a" {
-		t.Fatalf("AcceptedServices = %v, want [svc_a]", ack.AcceptedServices)
-	}
-	if len(ack.RejectedServices) != 1 || ack.RejectedServices[0] != "svc_missing" {
-		t.Fatalf("RejectedServices = %v, want [svc_missing]", ack.RejectedServices)
-	}
-	if len(ack.CurrentServices) != 1 || ack.CurrentServices[0] != "svc_a" {
-		t.Fatalf("CurrentServices = %v, want [svc_a]", ack.CurrentServices)
-	}
 	if _, ok := server.roomMembers["svc_a"][testClient]; !ok {
 		t.Fatalf("client missing from svc_a room after subscription update")
 	}
@@ -172,6 +159,19 @@ func TestHandleSetSubscriptionsValidatesAndReplacesRoomMembership(t *testing.T) 
 	message := decodeSingleMessage(t, <-testClient.send)
 	if message.Kind != "subscription_ack" {
 		t.Fatalf("message.Kind = %q, want %q", message.Kind, "subscription_ack")
+	}
+	var ack subscriptionAckPayload
+	if err := json.Unmarshal(message.Data, &ack); err != nil {
+		t.Fatalf("json.Unmarshal(message.Data): %v", err)
+	}
+	if len(ack.AcceptedServices) != 1 || ack.AcceptedServices[0] != "svc_a" {
+		t.Fatalf("AcceptedServices = %v, want [svc_a]", ack.AcceptedServices)
+	}
+	if len(ack.RejectedServices) != 1 || ack.RejectedServices[0] != "svc_missing" {
+		t.Fatalf("RejectedServices = %v, want [svc_missing]", ack.RejectedServices)
+	}
+	if len(ack.CurrentServices) != 1 || ack.CurrentServices[0] != "svc_a" {
+		t.Fatalf("CurrentServices = %v, want [svc_a]", ack.CurrentServices)
 	}
 }
 
