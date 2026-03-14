@@ -57,6 +57,7 @@ The backend sends batches in this shape:
       "kind": "event",
       "event_type": "temperature",
       "source": "ingest",
+      "service_name": "temp_dev",
       "timestamp": "2026-03-01T12:00:00Z",
       "data": {}
     }
@@ -72,6 +73,12 @@ Common message kinds right now:
   - Live ingest records
 - `ml_result`
   - ML anomaly results
+- `service_catalog`
+  - Full currently available service list for selector UIs
+- `subscription_ack`
+  - Result of a `set_service_subscriptions` request
+- `subscriptions_pruned`
+  - Notice that one or more subscribed services were removed server-side
 
 ## Basic usage
 
@@ -95,10 +102,13 @@ const socket = connect();
 onBatch(socket, (batch) => {
   for (const message of batch.messages) {
     if (message.kind === "event") {
-      console.log("event", message.data);
+      console.log("event", message.service_name, message.data);
     }
     if (message.kind === "ml_result") {
-      console.log("ml", message.data);
+      console.log("ml", message.service_name, message.data);
+    }
+    if (message.kind === "service_catalog") {
+      console.log("services", message.data);
     }
   }
 });
@@ -120,16 +130,24 @@ Example:
 
 ```ts
 send(socket, {
-  kind: "filter_update",
+  kind: "set_service_subscriptions",
   source: "frontend",
   timestamp: new Date().toISOString(),
   data: {
-    event_type: "temperature",
+    service_names: ["temp_dev"],
   },
 });
 ```
 
 The backend stream package can register handlers by `kind`, so new request types are simple to add.
+
+For the current service-room flow:
+
+1. wait for the initial `service_catalog`
+2. show the available services in the UI
+3. send `set_service_subscriptions` when the user picks one or more services
+4. read `subscription_ack` to confirm what was accepted
+5. if `subscriptions_pruned` arrives, remove those services from the local selection immediately
 
 ## Config
 

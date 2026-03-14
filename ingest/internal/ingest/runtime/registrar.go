@@ -10,6 +10,7 @@ Revision History:
 - 2026-03-07, Barrett Brown: Added base logic.
 - 2026-03-13, Barrett Brown: Added clearer registrar lifecycle comments.
 - 2026-03-14, Barrett Brown: Updated registrar reload matching notes to reflect the explicit service fingerprint path.
+- 2026-03-14, Barrett Brown: Added catalog-apply callbacks for websocket service pruning and catalog broadcast updates.
 Preconditions:
 - Source config path, initial catalog, and BufferManager are initialized.
 Acceptable Input Values/Types:
@@ -46,6 +47,7 @@ type RegistrarConfig struct {
 	DefaultModbusInterval time.Duration
 	InitialCatalog        *config.SourceCatalog
 	BufferManager         *BufferManager
+	OnCatalogApplied      func(SystemStatusSnapshot, []string)
 }
 
 type Registrar struct {
@@ -53,12 +55,13 @@ type Registrar struct {
 	defaultModbusInterval time.Duration
 	bufferManager         *BufferManager
 
-	mu              sync.RWMutex
-	services        map[string]*managedService
-	currentCatalog  *config.SourceCatalog
-	currentPressure PressureState
-	lastReloadAt    time.Time
-	lastReloadError string
+	mu               sync.RWMutex
+	services         map[string]*managedService
+	currentCatalog   *config.SourceCatalog
+	currentPressure  PressureState
+	lastReloadAt     time.Time
+	lastReloadError  string
+	onCatalogApplied func(SystemStatusSnapshot, []string)
 }
 
 // description: Builds a Registrar with source config path, initial catalog, and shared BufferManager.
@@ -79,6 +82,7 @@ func NewRegistrar(cfg RegistrarConfig) (*Registrar, error) {
 		services:              make(map[string]*managedService),
 		currentPressure:       PressureNormal,
 		currentCatalog:        cfg.InitialCatalog,
+		onCatalogApplied:      cfg.OnCatalogApplied,
 	}
 	r.bufferManager.RegisterPressureCallback(r.handlePressureChange)
 	return r, nil
@@ -306,6 +310,7 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 	r.mu.RUnlock()
 
 	// Stop services that were removed from the latest catalog.
+	removedServices := make([]string, 0)
 	for _, name := range currentServices {
 		if _, ok := nextDefinitions[name]; ok {
 			continue
@@ -320,6 +325,7 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 			service.Stop()
 		}
 		r.bufferManager.RemoveService(name)
+		removedServices = append(removedServices, name)
 		log.Printf("Registrar removed service=%s", name)
 	}
 
@@ -330,6 +336,9 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 	r.mu.Unlock()
 	if !initial {
 		log.Printf("Registrar applied source reload from %s", r.sourceConfigPath)
+	}
+	if r.onCatalogApplied != nil {
+		r.onCatalogApplied(r.StatusSnapshot(), removedServices)
 	}
 	return nil
 }

@@ -3,9 +3,10 @@ Name: web/src/utils/wsHelper.ts
 Description: Small frontend helper for connecting to the ingest websocket stream, sending messages, and receiving parsed payloads.
 Programmer: Barrett Brown
 Date Created: 2026-03-01
-Dates Revised: 2026-03-01
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-03-01, Barrett Brown: Created websocket helper for frontend usage.
+- 2026-03-14, Barrett Brown: Extended frontend websocket message typing for service-room stream fields.
 Preconditions:
 - Browser supports WebSocket.
 - Ingest websocket server is reachable.
@@ -35,6 +36,7 @@ export interface StreamMessage {
 	kind: string;
 	event_type?: string;
 	source: string;
+	service_name?: string;
 	timestamp: string;
 	data: unknown;
 }

@@ -16,10 +16,11 @@ The stream flow is:
 2. If needed, `main.go` registers inbound read handlers on that server
 3. `Start` launches the batch loop and HTTP server
 4. Browser clients connect to the configured websocket path
-5. The ingest package calls `PublishEvent` for live records
-6. The ingest package calls `PublishMLResult` for ML outputs
-7. The stream server batches these messages and broadcasts them to connected clients
-8. The stream server can also read inbound client messages and route them by message kind
+5. The ingest package calls `PublishScopedEvent` for live records
+6. The ingest package calls `PublishScopedMLResult` for ML outputs
+7. The stream server batches those messages by `service_name` and fans each batch out only to subscribers of that room
+8. The registrar pushes service catalog updates into the stream server so removed services can be pruned from subscriptions immediately
+9. The stream server can also read inbound client messages and route them by message kind
 
 This package keeps the frontend path separate from the Modbus loop itself.
 
@@ -27,8 +28,10 @@ This package keeps the frontend path separate from the Modbus loop itself.
 
 - Websocket listener
 - Client registration and cleanup
-- Outbound batching
-- Broadcast fanout to connected frontend clients
+- Per-client subscription state
+- Inverse room membership indexes
+- Outbound batching for service rooms plus global control messages
+- Service catalog broadcast and subscription prune notifications
 - Inbound websocket reads
 - Inbound message routing by kind
 
@@ -36,7 +39,7 @@ This package keeps the frontend path separate from the Modbus loop itself.
 
 - The ingest websocket sink does not talk to browsers directly
 - It calls this package instead
-- This package handles buffering and broadcasting
+- This package handles service-room routing and transport fanout
 
 That keeps frontend delivery concerns out of the core Modbus polling code.
 
@@ -86,8 +89,10 @@ streamServer.Publish(stream.Message{
 
 Use the built-in wrappers when they already fit:
 
-- `PublishEvent`
-- `PublishMLResult`
+- `PublishScopedEvent`
+- `PublishScopedMLResult`
+
+For service-scoped live traffic, set `service_name` and let the room fanout handle the rest. Leave `service_name` empty only for control messages that should go to everyone, such as `service_catalog`.
 
 ## Adding inbound handlers
 
@@ -106,18 +111,18 @@ Typical pattern:
 Example:
 
 ```go
-type filterRequest struct {
-	EventType string `json:"event_type"`
+type faultInjectRequest struct {
+	SourceName string `json:"source_name"`
 }
 
-wsServer.RegisterReadHandler("set_filter", func(ctx context.Context, msg stream.Message) {
-	var req filterRequest
+wsServer.RegisterReadHandler("inject_fault", func(ctx context.Context, session stream.ClientSession, msg stream.Message) {
+	var req faultInjectRequest
 	if err := json.Unmarshal(msg.Data, &req); err != nil {
 		log.Printf("Stream read decode error kind=%s: %v", msg.Kind, err)
 		return
 	}
 
-	log.Printf("Frontend requested filter for event_type=%s", req.EventType)
+	log.Printf("Frontend requested fault injection for source=%s from session=%s", req.SourceName, session.ID)
 
 	// Call the package that owns this behavior here.
 })
@@ -125,9 +130,23 @@ wsServer.RegisterReadHandler("set_filter", func(ctx context.Context, msg stream.
 
 Keep the handler small. If it starts doing real business logic, move that logic back into the owning package and call it from the handler.
 
+The stream package also owns one built-in inbound control message now:
+
+- `set_service_subscriptions`
+  - `data.service_names` is treated as the caller's full replacement subscription set
+  - the server validates those names against the current registrar catalog
+  - the caller receives `subscription_ack`
+
+The stream package can also emit these backend-generated control messages:
+
+- `service_catalog`
+  - broadcast to all clients on connect and after catalog apply
+- `subscriptions_pruned`
+  - sent only to affected clients when the registrar removes a subscribed service
+
 ## Development notes
 
-- This package should stay focused on transport, not business logic.
+- This package should stay focused on transport, routing, and subscription bookkeeping, not business logic.
 - If message contents change, update the frontend consumer at the same time.
-- If backpressure becomes a problem, tune batch size and flush interval first before changing the main ingest loop.
+- Room fanout is optimized around batching once per service room rather than rebuilding a custom batch per client.
 - For client-side examples and payload handling, point teammates to `docs/frontend-websockets.md`.

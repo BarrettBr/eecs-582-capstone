@@ -5,9 +5,10 @@ Name: ingest/internal/ingest/runtime/ml_fanout_test.go
 Description: Tests ML batch posting, skipped records, and basic ML response handling.
 Programmer: Barrett Brown
 Date Created: 2026-02-28
-Dates Revised: 2026-02-28
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-02-28, Barrett Brown: Created ML fanout tests for batch delivery behavior.
+- 2026-03-14, Barrett Brown: Added coverage for service-scoped ML batch grouping and payload routing.
 Preconditions:
 - HTTP test servers can be started locally during test execution.
 Acceptable Input Values/Types:
@@ -43,15 +44,17 @@ import (
 	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
 )
 
-func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testing.T) {
-	var received mlBatchRequest
+func TestDeliverMLBatchSplitsSameEventTypeByService(t *testing.T) {
+	received := make([]mlBatchRequest, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+		var request mlBatchRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("Decode() error = %v", err)
 		}
+		received = append(received, request)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"has_anomaly":true,"label":"ml_hit"}`))
 	}))
 	defer server.Close()
 
@@ -61,18 +64,24 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 	}
 
 	batch := []IngressEvent{
-		{Record: ingestevents.TempSample{Temperature: 72.5}, MLEnabled: true},
-		{Record: ingestevents.ValveSample{FlowRate: 12.5}, MLEnabled: true},
+		{SourceName: "svc_a", Record: ingestevents.TempSample{Temperature: 72.5}, MLEnabled: true},
+		{SourceName: "svc_b", Record: ingestevents.TempSample{Temperature: 73.5}, MLEnabled: true},
+		{SourceName: "svc_disabled", Record: ingestevents.TempSample{Temperature: 74.5}, MLEnabled: false},
 	}
 
 	if err := pipeline.deliverMLBatch(context.Background(), batch); err != nil {
 		t.Fatalf("deliverMLBatch() error = %v", err)
 	}
-	if received.EventType != "valve" && received.EventType != "temperature" {
-		t.Fatalf("received event_type = %q, want typed batch", received.EventType)
+	if len(received) != 2 {
+		t.Fatalf("received request count = %d, want 2", len(received))
 	}
-	if len(received.Samples) != 1 {
-		t.Fatalf("received samples = %d, want 1", len(received.Samples))
+	for _, request := range received {
+		if request.EventType != "temperature" {
+			t.Fatalf("request.EventType = %q, want %q", request.EventType, "temperature")
+		}
+		if len(request.Samples) != 1 {
+			t.Fatalf("request samples = %d, want 1", len(request.Samples))
+		}
 	}
 	var normalized MLAnomalyPayload
 	if err := json.Unmarshal(pipeline.mlLastResponse, &normalized); err != nil {
@@ -81,11 +90,11 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 	if normalized.Schema != "ml_anomaly_v1" {
 		t.Fatalf("normalized schema = %q, want %q", normalized.Schema, "ml_anomaly_v1")
 	}
-	if normalized.HasAnomaly {
-		t.Fatalf("normalized HasAnomaly = true, want false")
+	if !normalized.HasAnomaly {
+		t.Fatalf("normalized HasAnomaly = false, want true")
 	}
-	if string(normalized.RawResponse) != `{"ok":true}` {
-		t.Fatalf("normalized RawResponse = %q, want %q", string(normalized.RawResponse), `{"ok":true}`)
+	if normalized.ServiceName != "svc_a" && normalized.ServiceName != "svc_b" {
+		t.Fatalf("normalized ServiceName = %q, want one of the source services", normalized.ServiceName)
 	}
 }
 
@@ -105,7 +114,7 @@ func TestDeliverMLBatchHandlesEmptyAndBadResponses(t *testing.T) {
 
 	pipeline.mlAPIURL = server.URL
 	pipeline.mlHTTP = server.Client()
-	err := pipeline.deliverMLBatch(context.Background(), []IngressEvent{{Record: ingestevents.TempSample{Temperature: 1}, MLEnabled: true}})
+	err := pipeline.deliverMLBatch(context.Background(), []IngressEvent{{SourceName: "svc_temp", Record: ingestevents.TempSample{Temperature: 1}, MLEnabled: true}})
 	if err == nil {
 		t.Fatalf("deliverMLBatch() error = nil, want non-nil")
 	}

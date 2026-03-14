@@ -5,12 +5,13 @@ Name: ingest/main.go
 Description: Starts the ingest app, loads config, runs DB migrations, and keeps the Modbus loop running.
 Programmer: Barrett Brown
 Date Created: 2026-02-01
-Dates Revised: 2026-02-28
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-02-01, Barrett Brown: Created the file and the base structure
 - 2026-02-05, Barrett Brown: Added migrations and sqlc framework
 - 2026-02-15, Barrett Brown: Added standardized prologue documentation block.
 - 2026-02-28, Barrett Brown: Added DB to modbus loop for use in fanout
+- 2026-03-14, Barrett Brown: Wired registrar catalog updates into websocket service-room broadcasting and pruning.
 Preconditions:
 - Env vars are available (or defaults can be used).
 - DB file path and migration files can be accessed.
@@ -99,6 +100,9 @@ func main() {
 		DefaultModbusInterval: appCfg.Ingest.PollInterval,
 		InitialCatalog:        appCfg.Sources,
 		BufferManager:         bufferManager,
+		OnCatalogApplied: func(snapshot ingestruntime.SystemStatusSnapshot, removed []string) {
+			wsServer.ApplyServiceCatalog(buildServiceCatalogPayload(snapshot), removed)
+		},
 	})
 	if err != nil {
 		log.Fatalf("Error creating registrar: %v", err)
@@ -107,7 +111,7 @@ func main() {
 	type faultInjectRequest struct {
 		SourceName string `json:"source_name"`
 	}
-	wsServer.RegisterReadHandler("inject_fault", func(_ context.Context, msg stream.Message) {
+	wsServer.RegisterReadHandler("inject_fault", func(_ context.Context, _ stream.ClientSession, msg stream.Message) {
 		var req faultInjectRequest
 		if len(msg.Data) > 0 {
 			if err := json.Unmarshal(msg.Data, &req); err != nil {
@@ -154,4 +158,19 @@ func runMigrations(db *sql.DB, migrationsPath string) error {
 		return fmt.Errorf("Error, goose up: %w", err)
 	}
 	return nil
+}
+
+func buildServiceCatalogPayload(snapshot ingestruntime.SystemStatusSnapshot) stream.ServiceCatalogPayload {
+	services := make([]stream.ServiceCatalogEntry, 0, len(snapshot.Services))
+	for _, service := range snapshot.Services {
+		services = append(services, stream.ServiceCatalogEntry{
+			Name:      service.Name,
+			Mode:      service.Mode,
+			EventType: service.EventType,
+		})
+	}
+	return stream.ServiceCatalogPayload{
+		Revision: snapshot.LastReloadAt,
+		Services: services,
+	}
 }

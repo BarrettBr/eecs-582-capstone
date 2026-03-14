@@ -66,6 +66,7 @@ It:
 - watches the source config file
 - adds, removes, or restarts services when config changes
 - merges service state with buffer state for the status API
+- pushes updated service catalogs into the websocket stream layer so removed services can be pruned from active subscriptions
 
 If you want to know "who creates services and who shuts them down", this is that.
 
@@ -112,6 +113,7 @@ One useful detail:
 
 - websocket JSON is now encoded only in the websocket path
 - the ingest service does not eagerly JSON-encode every event at ingress anymore
+- live websocket and ML messages now keep `service_name` so the frontend can subscribe to specific services instead of receiving all traffic
 
 That keeps the hot path lighter.
 
@@ -145,7 +147,7 @@ Here is the normal flow from source read to dashboard update:
 6. `BufferManager` queues it using reserved units first, then shared units if needed
 7. the dispatcher forwards events into the shared pipeline
 8. the pipeline sends the event to SQL, ML, and websocket sinks
-9. the websocket streamer batches outgoing messages and broadcasts them to connected dashboard clients
+9. the websocket streamer batches outgoing messages by service room and sends each room only to subscribed dashboard clients
 
 That is the main request free data path.
 

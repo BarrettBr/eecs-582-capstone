@@ -30,6 +30,13 @@ From the repository root:
 
 Use `Ctrl+C` to stop all three processes started by the Makefile target.
 
+If you are on Windows with Git Bash and no `make`, use:
+
+- `./dev-stack.sh`
+  - same behavior as `make dev`
+- `./dev-stack.sh modbus`
+  - same behavior as `make dev-modbus`
+
 ## Simulator Mode
 
 Simulator mode is the default local development path.
@@ -171,7 +178,9 @@ The same endpoint can also accept:
 }
 ```
 
-Ingest groups outgoing ML batches by `event_type` before sending them.
+Ingest groups outgoing ML batches by `service_name + event_type` before sending them.
+
+That keeps ML anomaly results attributable to one service room on the websocket side.
 
 ## Ingestion Status API
 
@@ -190,6 +199,15 @@ The response includes:
 - one status object per service with buffer occupancy and drop or sampling counters
 
 This endpoint is the quickest way to confirm hot reloads, pressure transitions, and service level degradation behavior.
+
+The websocket stream also now emits:
+
+- `service_catalog`
+  - current service list for frontend selectors
+- `subscription_ack`
+  - confirmation of accepted websocket service subscriptions
+- `subscriptions_pruned`
+  - targeted notice when a subscribed service was removed during registrar reload
 
 ## Overload Behavior
 

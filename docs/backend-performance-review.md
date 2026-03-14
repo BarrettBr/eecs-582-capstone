@@ -19,7 +19,7 @@ The backend is in decent shape for a capstone-sized project, and the largest buf
 
 1. The managed service loop still behaves like work-plus-sleep rather than true fixed-rate scheduling, which limits very high configured poll rates.
 2. The shared fanout path still does avoidable allocation work in ML and SQL batching.
-3. Websocket batching and history response shaping are acceptable for now, but worth keeping in mind if measured load shifts there.
+3. Websocket room batching and history response shaping are acceptable for now, but worth keeping in mind if measured load shifts there.
 
 If only one subsystem gets optimized next, it should be the service scheduling and downstream batching hot path.
 
@@ -82,7 +82,7 @@ Priority:
 
 - Medium
 
-### 3. Websocket server does extra copying and batch marshaling, but the tradeoff is probably acceptable
+### 3. Websocket server still does extra copying and room batch marshaling, but the tradeoff is probably acceptable
 
 Files:
 
@@ -91,8 +91,9 @@ Files:
 Why this matters:
 
 - `Publish()` clones `msg.Data`
-- batch loop allocates and marshals full websocket frames per flush
+- batch loop allocates and marshals websocket frames per room flush
 - inbound payload parsing attempts batch JSON, then single message JSON
+- service-room routing keeps fanout off the global client list, which is the right tradeoff, but it means bursty multi-room clients can receive multiple frames per flush cycle
 
 This is real overhead, but compared to the remaining service scheduling and fanout work it is not the main bottleneck unless websocket traffic becomes dominant.
 

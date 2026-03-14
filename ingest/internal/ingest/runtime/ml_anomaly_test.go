@@ -5,9 +5,10 @@ Name: ingest/internal/ingest/runtime/ml_anomaly_test.go
 Description: Tests ML anomaly normalization so frontend payloads keep a stable schema.
 Programmer: Barrett Brown
 Date Created: 2026-03-01
-Dates Revised: 2026-03-01
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-03-01, Barrett Brown: Created tests for ML anomaly payload normalization.
+- 2026-03-14, Barrett Brown: Added coverage for service-scoped ML anomaly normalization.
 Preconditions:
 - Parsed ML response values are available for helper testing.
 Acceptable Input Values/Types:
@@ -38,7 +39,7 @@ func TestNormalizeMLAnomalyPayload(t *testing.T) {
 		"score":      0.97,
 	}
 
-	payload := normalizeMLAnomalyPayload("temperature", parsed, raw)
+	payload := normalizeMLAnomalyPayload("svc_temp", "temperature", parsed, raw)
 	if payload.Schema != "ml_anomaly_v1" {
 		t.Fatalf("Schema = %q, want %q", payload.Schema, "ml_anomaly_v1")
 	}
@@ -57,6 +58,9 @@ func TestNormalizeMLAnomalyPayload(t *testing.T) {
 	if payload.EventType != "temperature" {
 		t.Fatalf("EventType = %q, want %q", payload.EventType, "temperature")
 	}
+	if payload.ServiceName != "svc_temp" {
+		t.Fatalf("ServiceName = %q, want %q", payload.ServiceName, "svc_temp")
+	}
 }
 
 func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
@@ -65,7 +69,7 @@ func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
 		"anomaly": 1.0,
 	}
 
-	payload := normalizeMLAnomalyPayload("valve", parsed, raw)
+	payload := normalizeMLAnomalyPayload("svc_valve", "valve", parsed, raw)
 	if !payload.HasAnomaly {
 		t.Fatalf("HasAnomaly = false, want true")
 	}
@@ -74,6 +78,9 @@ func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
 	}
 	if payload.EventType != "valve" {
 		t.Fatalf("EventType = %q, want %q", payload.EventType, "valve")
+	}
+	if payload.ServiceName != "svc_valve" {
+		t.Fatalf("ServiceName = %q, want %q", payload.ServiceName, "svc_valve")
 	}
 }
 
@@ -86,7 +93,7 @@ func TestNormalizeMLAnomalyPayloadExtractsNestedLabelsAndScoreOnce(t *testing.T)
 		},
 	}
 
-	payload := normalizeMLAnomalyPayload("temperature", parsed, raw)
+	payload := normalizeMLAnomalyPayload("svc_temp", "temperature", parsed, raw)
 	if !payload.HasAnomaly {
 		t.Fatalf("HasAnomaly = false, want true")
 	}

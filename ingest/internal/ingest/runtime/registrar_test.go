@@ -1,5 +1,33 @@
 package runtime
 
+/*
+Name: ingest/internal/ingest/runtime/registrar_test.go
+Description: Tests registrar catalog apply, hot reload, and catalog callback behavior.
+Programmer: Barrett Brown
+Date Created: 2026-03-14
+Dates Revised: 2026-03-14
+Revision History:
+- 2026-03-14, Barrett Brown: Added registrar coverage for apply, reload, and service catalog callback behavior.
+Preconditions:
+- Test source definitions point to valid validation files.
+Acceptable Input Values/Types:
+- Valid source catalogs, buffering configs, and temporary source files.
+Unacceptable Input Values/Types:
+- No special invalid runtime dependencies are required beyond malformed test catalogs.
+Postconditions:
+- Confirms registrar service lifecycle and callback behavior stay aligned with source catalog changes.
+Return Values/Types:
+- Test functions return no value.
+Error/Exception Conditions:
+- Unexpected missing services, reloads, or callback payloads fail the tests.
+Side Effects:
+- Starts local registrar goroutines and writes temporary source config files.
+Invariants:
+- Registrar snapshots should reflect the currently applied catalog.
+Known Faults:
+- Does not exercise every possible reload error branch.
+*/
+
 import (
 	"context"
 	"encoding/json"
@@ -71,6 +99,78 @@ func TestRegistrarApplyCatalogAddsAndRemovesServices(t *testing.T) {
 	}
 	if _, ok := registrar.services["svc_b"]; !ok {
 		t.Fatalf("svc_b missing after add")
+	}
+}
+
+func TestRegistrarApplyCatalogNotifiesCatalogCallbackWithRemovedServices(t *testing.T) {
+	validationPath := mustValidationPath(t, "temperature.json")
+	bufferManager := NewBufferManager(&Pipeline{}, config.BufferingConfig{
+		SharedUnits:             4,
+		SamplingSharedThreshold: 0.8,
+		Pressure: config.PressureThresholds{
+			ElevatedEnter: 0.70,
+			ElevatedExit:  0.50,
+			HighEnter:     0.85,
+			HighExit:      0.65,
+			CriticalEnter: 0.95,
+			CriticalExit:  0.80,
+		},
+	}, 32)
+	initialCatalog := &config.SourceCatalog{
+		Runtime: config.SourceRuntimeConfig{Buffering: bufferManager.runtime},
+		Sources: []config.SourceDefinition{
+			testRegistrarSource("svc_a", validationPath),
+		},
+	}
+	updatedCatalog := &config.SourceCatalog{
+		Runtime: config.SourceRuntimeConfig{Buffering: bufferManager.runtime},
+		Sources: []config.SourceDefinition{
+			testRegistrarSource("svc_b", validationPath),
+		},
+	}
+
+	type callbackState struct {
+		snapshot SystemStatusSnapshot
+		removed  []string
+	}
+	callbacks := make(chan callbackState, 2)
+	registrar, err := NewRegistrar(RegistrarConfig{
+		SourceConfigPath:      "config/sources.json",
+		DefaultModbusInterval: 5 * time.Millisecond,
+		InitialCatalog:        initialCatalog,
+		BufferManager:         bufferManager,
+		OnCatalogApplied: func(snapshot SystemStatusSnapshot, removed []string) {
+			callbacks <- callbackState{
+				snapshot: snapshot,
+				removed:  append([]string(nil), removed...),
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistrar() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := registrar.applyCatalog(ctx, initialCatalog, true); err != nil {
+		t.Fatalf("applyCatalog(initial) error = %v", err)
+	}
+	<-callbacks
+
+	if err := registrar.applyCatalog(ctx, updatedCatalog, false); err != nil {
+		t.Fatalf("applyCatalog(updated) error = %v", err)
+	}
+
+	state := <-callbacks
+	if len(state.removed) != 1 || state.removed[0] != "svc_a" {
+		t.Fatalf("removed = %v, want [svc_a]", state.removed)
+	}
+	if len(state.snapshot.Services) != 1 || state.snapshot.Services[0].Name != "svc_b" {
+		t.Fatalf("snapshot.Services = %+v, want only svc_b", state.snapshot.Services)
+	}
+	if state.snapshot.LastReloadAt == "" {
+		t.Fatalf("snapshot.LastReloadAt = empty, want populated reload timestamp")
 	}
 }
 

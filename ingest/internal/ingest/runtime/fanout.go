@@ -14,6 +14,7 @@ Revision History:
 - 2026-03-13, Barrett Brown: Added clearer sink worker and delivery comments.
 - 2026-03-14, Barrett Brown: Restored richer pre-refactor prologue detail from main branch history.
 - 2026-03-14, Barrett Brown: Updated runtime fanout during the ingest file structure refactor to use explicit events package imports.
+- 2026-03-14, Barrett Brown: Routed websocket and ML fanout through service-scoped delivery paths.
 Preconditions:
 - Pipeline is initialized with its downstream channels and dependencies.
 Acceptable Input Values/Types:
@@ -56,6 +57,11 @@ import (
 type mlBatchRequest struct {
 	EventType string `json:"event_type"`
 	Samples   []any  `json:"samples"`
+}
+
+type mlBatchKey struct {
+	ServiceName string
+	EventType   string
 }
 
 // description: Starts the downstream sink workers owned by the shared pipeline.
@@ -165,7 +171,7 @@ func (p *Pipeline) runSQLSink(ctx context.Context) {
 	}
 }
 
-// description: Groups ML enabled events by type and posts each batch.
+// description: Groups ML enabled events by service and type and posts each batch.
 // input: context plus one batch of ingress events.
 // output: Returns nil when all type batches are delivered successfully.
 func (p *Pipeline) deliverMLBatch(ctx context.Context, batch []IngressEvent) error {
@@ -173,19 +179,23 @@ func (p *Pipeline) deliverMLBatch(ctx context.Context, batch []IngressEvent) err
 		return nil
 	}
 
-	grouped := make(map[string][]any)
+	grouped := make(map[mlBatchKey][]any)
 	for _, event := range batch {
-		if !event.MLEnabled {
+		if !event.MLEnabled || event.SourceName == "" {
 			continue
 		}
-		grouped[event.Record.EventType()] = append(grouped[event.Record.EventType()], event.Record.Payload())
+		key := mlBatchKey{
+			ServiceName: event.SourceName,
+			EventType:   event.Record.EventType(),
+		}
+		grouped[key] = append(grouped[key], event.Record.Payload())
 	}
 
-	for eventType, samples := range grouped {
+	for key, samples := range grouped {
 		if len(samples) == 0 {
 			continue
 		}
-		if err := p.deliverMLTypeBatch(ctx, eventType, samples); err != nil {
+		if err := p.deliverMLTypeBatch(ctx, key.ServiceName, key.EventType, samples); err != nil {
 			return err
 		}
 	}
@@ -193,10 +203,10 @@ func (p *Pipeline) deliverMLBatch(ctx context.Context, batch []IngressEvent) err
 	return nil
 }
 
-// description: Sends one typed ML batch to the configured ML service and normalizes the response.
-// input: context, event type name, and typed sample payloads.
+// description: Sends one service scoped typed ML batch to the configured ML service and normalizes the response.
+// input: context, service name, event type name, and typed sample payloads.
 // output: Returns nil when the ML request and response handling succeed.
-func (p *Pipeline) deliverMLTypeBatch(ctx context.Context, eventType string, samples []any) error {
+func (p *Pipeline) deliverMLTypeBatch(ctx context.Context, serviceName, eventType string, samples []any) error {
 	body, err := json.Marshal(mlBatchRequest{
 		EventType: eventType,
 		Samples:   samples,
@@ -241,7 +251,7 @@ func (p *Pipeline) deliverMLTypeBatch(ctx context.Context, eventType string, sam
 		return fmt.Errorf("ML response json parse (%s): %w", eventType, err)
 	}
 
-	normalized := normalizeMLAnomalyPayload(eventType, parsed, trimmed)
+	normalized := normalizeMLAnomalyPayload(serviceName, eventType, parsed, trimmed)
 	normalizedBody, err := json.Marshal(normalized)
 	if err != nil {
 		return fmt.Errorf("ML normalized response encode (%s): %w", eventType, err)
@@ -251,7 +261,7 @@ func (p *Pipeline) deliverMLTypeBatch(ctx context.Context, eventType string, sam
 		return nil
 	}
 	if p.streamer != nil {
-		p.streamer.PublishMLResult(eventType, normalizedBody)
+		p.streamer.PublishScopedMLResult(eventType, serviceName, normalizedBody)
 	}
 	return nil
 }
@@ -433,7 +443,7 @@ func (p *Pipeline) deliverToWebsocket(_ context.Context, event IngressEvent) err
 		return fmt.Errorf("encode websocket payload: %w", err)
 	}
 
-	p.streamer.PublishEvent(event.Record.EventType(), payload, timestamp)
+	p.streamer.PublishScopedEvent(event.Record.EventType(), event.SourceName, payload, timestamp)
 	return nil
 }
 

@@ -5,9 +5,10 @@ Name: ingest/internal/ingest/runtime/ml_anomaly.go
 Description: Defines a stable ML anomaly payload shape and helpers to normalize ML responses into it.
 Programmer: Barrett Brown
 Date Created: 2026-03-01
-Dates Revised: 2026-03-01
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-03-01, Barrett Brown: Created consistent ML anomaly payload helpers for frontend forwarding.
+- 2026-03-14, Barrett Brown: Added service identity to normalized ML anomaly payloads for service-room routing.
 Preconditions:
 - Raw ML response is valid JSON after HTTP success.
 Acceptable Input Values/Types:
@@ -37,6 +38,7 @@ import (
 // MLAnomalyPayload is the stable payload shape sent to the frontend for ML results.
 type MLAnomalyPayload struct {
 	Schema        string          `json:"schema"`
+	ServiceName   string          `json:"service_name,omitempty"`
 	EventType     string          `json:"event_type"`
 	GeneratedAt   string          `json:"generated_at"`
 	GeneratedAtMs int64           `json:"generated_at_ms"`
@@ -46,11 +48,12 @@ type MLAnomalyPayload struct {
 	RawResponse   json.RawMessage `json:"raw_response"`
 }
 
-func normalizeMLAnomalyPayload(eventType string, parsed any, raw []byte) MLAnomalyPayload {
+func normalizeMLAnomalyPayload(serviceName, eventType string, parsed any, raw []byte) MLAnomalyPayload {
 	now := time.Now().UTC()
 
 	payload := MLAnomalyPayload{
 		Schema:        "ml_anomaly_v1",
+		ServiceName:   serviceName,
 		EventType:     eventType,
 		GeneratedAt:   now.Format(time.RFC3339Nano),
 		GeneratedAtMs: now.UnixMilli(),
