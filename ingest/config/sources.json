@@ -39,7 +39,7 @@
         }
       },
       "simulator": {
-        "interval": "10us",
+        "interval": "100ms",
         "seed": 42,
         "profile": "temperature_default"
       }
