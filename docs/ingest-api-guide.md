@@ -7,6 +7,7 @@ This guide explains where to add HTTP API endpoints in ingest while keeping webs
 - Websocket endpoint: `/ws`
 - Versioned API base path: `/api/v1` (configurable via `API_BASE_PATH`)
 - Current API endpoint: `GET /api/v1/ping`
+- Current ingest status endpoint: `GET /api/v1/ingestion/status`
 - Dynamic history endpoint: `GET /api/v1/history/{kind}/{window}`
 - Dynamic report endpoint: `GET /api/v1/report/{kind}/{window}`
 
@@ -24,6 +25,8 @@ apiRegistration := api.RegisterRoutes(wsServer, api.Config{
 	BasePath: appCfg.Stream.APIBasePath,
 })
 ```
+
+The ingest status route is useful while working on backend runtime behavior because it shows registrar and BufferManager state without needing to inspect logs first.
 
 ## History and Report Routing
 

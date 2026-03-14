@@ -9,7 +9,12 @@ An AI-assisted industrial process monitoring and control demonstrator.
 - `docs/` Project notes and documentation. See `docs/School` for course documents.
 - `ingest/` Data ingestion pipeline and SQL schema/migrations (View `docs/ingest-sql.md` for a guide on SQL with Go).
 - `ml/` Model training and artifacts.
-- `web/` Web app frontend and static assets.
+- `frontend/` Web app frontend and static assets.
+
+If you are trying to understand the ingest backend quickly, start with:
+
+- `docs/ingest-quick-guide.md`
+- `docs/dev-run-guide.md`
 
 ## Running Locally
 

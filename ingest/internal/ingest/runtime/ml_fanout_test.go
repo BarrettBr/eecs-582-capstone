@@ -1,7 +1,7 @@
-package ingest
+package runtime
 
 /*
-Name: ingest/internal/ingest/ml_fanout_test.go
+Name: ingest/internal/ingest/runtime/ml_fanout_test.go
 Description: Tests ML batch posting, skipped records, and basic ML response handling.
 Programmer: Barrett Brown
 Date Created: 2026-02-28
@@ -39,6 +39,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
 )
 
 func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testing.T) {
@@ -53,17 +55,17 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 	}))
 	defer server.Close()
 
-	loop := &ModbusLoop{
+	pipeline := &Pipeline{
 		mlAPIURL: server.URL,
 		mlHTTP:   server.Client(),
 	}
 
-	batch := []fanoutEvent{
-		{record: TempSample{Temperature: 72.5}, mlEnabled: true},
-		{record: ValveSample{FlowRate: 12.5}, mlEnabled: true},
+	batch := []IngressEvent{
+		{Record: ingestevents.TempSample{Temperature: 72.5}, MLEnabled: true},
+		{Record: ingestevents.ValveSample{FlowRate: 12.5}, MLEnabled: true},
 	}
 
-	if err := loop.deliverMLBatch(context.Background(), batch); err != nil {
+	if err := pipeline.deliverMLBatch(context.Background(), batch); err != nil {
 		t.Fatalf("deliverMLBatch() error = %v", err)
 	}
 	if received.EventType != "valve" && received.EventType != "temperature" {
@@ -73,7 +75,7 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 		t.Fatalf("received samples = %d, want 1", len(received.Samples))
 	}
 	var normalized MLAnomalyPayload
-	if err := json.Unmarshal(loop.mlLastResponse, &normalized); err != nil {
+	if err := json.Unmarshal(pipeline.mlLastResponse, &normalized); err != nil {
 		t.Fatalf("json.Unmarshal(mlLastResponse) error = %v", err)
 	}
 	if normalized.Schema != "ml_anomaly_v1" {
@@ -88,11 +90,11 @@ func TestDeliverMLBatchSkipsUnsupportedEventsAndPostsTemperatureSamples(t *testi
 }
 
 func TestDeliverMLBatchHandlesEmptyAndBadResponses(t *testing.T) {
-	loop := &ModbusLoop{
+	pipeline := &Pipeline{
 		mlAPIURL: "http://example.invalid",
 		mlHTTP:   &http.Client{Timeout: 10 * time.Millisecond},
 	}
-	if err := loop.deliverMLBatch(context.Background(), nil); err != nil {
+	if err := pipeline.deliverMLBatch(context.Background(), nil); err != nil {
 		t.Fatalf("deliverMLBatch(nil) error = %v", err)
 	}
 
@@ -101,9 +103,9 @@ func TestDeliverMLBatchHandlesEmptyAndBadResponses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	loop.mlAPIURL = server.URL
-	loop.mlHTTP = server.Client()
-	err := loop.deliverMLBatch(context.Background(), []fanoutEvent{{record: TempSample{Temperature: 1}, mlEnabled: true}})
+	pipeline.mlAPIURL = server.URL
+	pipeline.mlHTTP = server.Client()
+	err := pipeline.deliverMLBatch(context.Background(), []IngressEvent{{Record: ingestevents.TempSample{Temperature: 1}, MLEnabled: true}})
 	if err == nil {
 		t.Fatalf("deliverMLBatch() error = nil, want non-nil")
 	}

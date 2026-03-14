@@ -1,7 +1,7 @@
-package ingest
+package runtime
 
 /*
-Name: ingest/internal/ingest/fanout_test.go
+Name: ingest/internal/ingest/runtime/fanout_test.go
 Description: Tests SQL fanout batching, anomaly persistence, and normal sample rate behavior.
 Programmer: Barrett Brown
 Date Created: 2026-02-28
@@ -39,6 +39,7 @@ import (
 	"testing"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
 	_ "modernc.org/sqlite"
 )
 
@@ -46,15 +47,15 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 	db := openTestSQLite(t)
 	createIngestTables(t, db)
 
-	loop := &ModbusLoop{
+	pipeline := &Pipeline{
 		db:                  db,
 		queries:             database.New(db),
 		sqlNormalSampleRate: 2,
 	}
 
-	batch := []fanoutEvent{
+	batch := []IngressEvent{
 		{
-			record: TempSample{
+			Record: ingestevents.TempSample{
 				Timestamp:    "2026-02-28T12:00:00Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 1,
@@ -64,7 +65,7 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 			},
 		},
 		{
-			record: TempSample{
+			Record: ingestevents.TempSample{
 				Timestamp:    "2026-02-28T12:00:01Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 2,
@@ -75,7 +76,7 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 			},
 		},
 		{
-			record: TempSample{
+			Record: ingestevents.TempSample{
 				Timestamp:    "2026-02-28T12:00:02Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 3,
@@ -86,7 +87,7 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 		},
 	}
 
-	if err := loop.deliverSQLBatch(context.Background(), batch); err != nil {
+	if err := pipeline.deliverSQLBatch(context.Background(), batch); err != nil {
 		t.Fatalf("deliverSQLBatch() error = %v", err)
 	}
 

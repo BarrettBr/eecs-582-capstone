@@ -1,5 +1,34 @@
 package config
 
+/*
+Name: ingest/internal/config/env.go
+Description: Reads primitive config values from environment variables with simple fallback helpers.
+Programmer: Barrett Brown
+Date Created: 2026-03-07
+Dates Revised: 2026-03-13
+Revision History:
+- 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
+- 2026-03-13, Barrett Brown: Added clearer helper comments for config loading.
+Preconditions:
+- Environment variables are available through the current process.
+Acceptable Input Values/Types:
+- String, integer, duration, and bool env var values.
+Unacceptable Input Values/Types:
+- Malformed values that do not match the requested type.
+Postconditions:
+- Returns parsed config helper values or parse errors.
+Return Values/Types:
+- Helper functions return typed values and optional errors.
+Error/Exception Conditions:
+- Parse failures return descriptive errors.
+Side Effects:
+- Reads process environment values.
+Invariants:
+- Empty env values always fall back to the provided default.
+Known Faults:
+- These helpers do not support complex list or map types.
+*/
+
 import (
 	"fmt"
 	"os"
@@ -43,20 +72,6 @@ func getIntEnv(key string, fallback int) (int, error) {
 			return 0, fmt.Errorf("parse %s: %w", key, err)
 		}
 		return n, nil
-	}
-	return fallback, nil
-}
-
-func getUint16Env(key string, fallback uint16) (uint16, error) {
-	if v := os.Getenv(key); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return 0, fmt.Errorf("parse %s: %w", key, err)
-		}
-		if n < 0 || n > 65535 {
-			return 0, fmt.Errorf("%s must be between 0 and 65535", key)
-		}
-		return uint16(n), nil
 	}
 	return fallback, nil
 }

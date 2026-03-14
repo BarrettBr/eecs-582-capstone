@@ -70,24 +70,6 @@ func TestGetDurationEnv(t *testing.T) {
 	}
 }
 
-func TestGetUint16Env(t *testing.T) {
-	key := "CONFIG_TEST_UINT16"
-	t.Setenv(key, "123")
-
-	got, err := getUint16Env(key, 7)
-	if err != nil {
-		t.Fatalf("getUint16Env() error = %v", err)
-	}
-	if got != 123 {
-		t.Fatalf("getUint16Env() = %d, want 123", got)
-	}
-
-	t.Setenv(key, "70000")
-	if _, err := getUint16Env(key, 7); err == nil {
-		t.Fatalf("getUint16Env() range error = nil, want non-nil")
-	}
-}
-
 func TestGetIntEnvAndGetBoolEnv(t *testing.T) {
 	intKey := "CONFIG_TEST_INT"
 	boolKey := "CONFIG_TEST_BOOL"

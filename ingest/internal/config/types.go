@@ -1,5 +1,35 @@
 package config
 
+/*
+Name: ingest/internal/config/types.go
+Description: Defines the main runtime config structs shared across ingest startup and wiring.
+Programmer: Barrett Brown
+Date Created: 2026-03-07
+Dates Revised: 2026-03-14
+Revision History:
+- 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
+- 2026-03-13, Barrett Brown: Added clearer config type descriptions.
+- 2026-03-14, Barrett Brown: Added source config profile selection so one catalog can support simulator and modbus presets.
+Preconditions:
+- Config values are populated by the config load path before use.
+Acceptable Input Values/Types:
+- Runtime settings for database, ingest, stream, and source catalog wiring.
+Unacceptable Input Values/Types:
+- Nil required dependencies after load completion.
+Postconditions:
+- Provides shared config types for the ingest service.
+Return Values/Types:
+- Struct definitions only.
+Error/Exception Conditions:
+- None in this file directly.
+Side Effects:
+- None.
+Invariants:
+- Config groups stay separated by subsystem.
+Known Faults:
+- Runtime config still mixes both settings and initialized dependencies in one top level struct.
+*/
+
 import (
 	"database/sql"
 	"time"
@@ -34,6 +64,8 @@ type SQLiteConfig struct {
 type IngestConfig struct {
 	PollInterval     time.Duration
 	SourceConfigPath string
+	SourceProfile    string
+	BufferChunkSize  int
 	MLFanout         MLFanoutConfig
 	SQLFanout        SQLFanoutConfig
 }
@@ -44,7 +76,6 @@ type MLFanoutConfig struct {
 	HTTPTimeout        time.Duration
 	BatchSize          int
 	BatchFlushInterval time.Duration
-	DropOnOverload     bool
 }
 
 // SQLFanoutConfig controls batched database writes.

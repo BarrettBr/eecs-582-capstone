@@ -1,5 +1,40 @@
 package api
 
+/*
+Name: ingest/internal/api/history.go
+Description: Serves history and report API endpoints by mapping request paths to prebuilt database queries.
+Programmer: Barrett Brown
+Date Created: 2026-03-07
+Dates Revised: 2026-03-13
+Revision History:
+- 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
+- 2026-03-13, Barrett Brown: Added clearer handler and query flow comments.
+Preconditions:
+- API routes are registered with a live query service.
+- Request path values use the expected kind and window names.
+Acceptable Input Values/Types:
+- HTTP GET requests for history and report endpoints.
+- Supported source kinds like temp and valve.
+Unacceptable Input Values/Types:
+- Unsupported endpoint kinds or windows.
+- Nil query dependencies.
+Postconditions:
+- Returns history item lists or report summaries as JSON responses.
+Return Values/Types:
+- Handler methods write HTTP responses directly.
+- Helper functions return querySelection values or errors.
+Error/Exception Conditions:
+- Bad path values return 400 responses.
+- Query failures return 500 responses.
+Side Effects:
+- Reads from the database and writes HTTP responses.
+Invariants:
+- Selection building stays consistent across history and report endpoints.
+- Response shapes remain stable for the frontend.
+Known Faults:
+- History formatting still does per row mapping work in memory.
+*/
+
 import (
 	"net/http"
 	"strings"
@@ -18,6 +53,9 @@ type querySelection struct {
 	Seconds  int64  `json:"-"`
 }
 
+// description: Handles history endpoint requests and validates the path selection.
+// input: HTTP response writer and request with kind and window path values.
+// output: Writes a JSON history response or an API error response.
 func (cfg *apiConfig) historyHandler(w http.ResponseWriter, r *http.Request) {
 	selection, err := buildQuerySelection("history", r.PathValue("kind"), r.PathValue("window"))
 	if err != nil {
@@ -27,6 +65,9 @@ func (cfg *apiConfig) historyHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.runSelectedQuery(w, r, selection)
 }
 
+// description: Handles report endpoint requests and validates the path selection.
+// input: HTTP response writer and request with kind and window path values.
+// output: Writes a JSON report response or an API error response.
 func (cfg *apiConfig) reportHandler(w http.ResponseWriter, r *http.Request) {
 	selection, err := buildQuerySelection("report", r.PathValue("kind"), r.PathValue("window"))
 	if err != nil {
@@ -36,6 +77,9 @@ func (cfg *apiConfig) reportHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.runSelectedQuery(w, r, selection)
 }
 
+// description: Converts endpoint path values into one validated query selection.
+// input: endpoint name plus kind and window strings from the route.
+// output: Returns a filled querySelection or an error for invalid input.
 func buildQuerySelection(endpoint, kind, window string) (querySelection, error) {
 	selection := querySelection{
 		Endpoint: endpoint,
@@ -100,11 +144,15 @@ type reportSummary struct {
 	ValveOpenDurationSeconds int64   `json:"valve_open_duration_seconds"`
 }
 
+// description: Runs the selected history or report query and formats the JSON response.
+// input: HTTP response writer, request context, and a validated querySelection.
+// output: Writes a report summary or history item list to the response.
 func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, selection querySelection) {
 	ctx := r.Context()
 	sinceUnix := time.Now().UTC().Unix() - selection.Seconds
 	nowUnix := time.Now().UTC().Unix()
 
+	// Run the report query path.
 	if selection.Endpoint == "report" {
 		summary, err := cfg.queries.GetReportSummaryBetweenUnix(ctx, database.GetReportSummaryBetweenUnixParams{
 			SinceUnix: sinceUnix,
@@ -135,6 +183,7 @@ func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	// Build history items from the selected source table.
 	items := make([]historyEvent, 0, 256)
 	switch selection.Kind {
 	case "temp":

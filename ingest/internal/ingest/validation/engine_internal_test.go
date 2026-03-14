@@ -1,13 +1,15 @@
-package ingest
+package validation
 
 /*
-Name: ingest/internal/ingest/validation_internal_test.go
+Name: ingest/internal/ingest/validation/engine_internal_test.go
 Description: Tests validation helpers, file loading errors, and validation failure paths.
 Programmer: Barrett Brown
 Date Created: 2026-02-28
-Dates Revised: 2026-02-28
+Dates Revised: 2026-03-14
 Revision History:
 - 2026-02-28, Barrett Brown: Created internal validation helper coverage tests.
+- 2026-03-14, Barrett Brown: Updated validation tests for direct field access instead of ToRecord maps.
+- 2026-03-14, Barrett Brown: Moved internal validation helper coverage alongside the validation subpackage.
 Preconditions:
 - Temporary files can be written for validation spec tests.
 Acceptable Input Values/Types:
@@ -40,10 +42,13 @@ type stubRecordEvent struct {
 	record map[string]any
 }
 
-func (s stubRecordEvent) ToRecord() map[string]any { return s.record }
-func (s stubRecordEvent) EventType() string        { return "stub" }
-func (s stubRecordEvent) Payload() any             { return s.record }
-func (s stubRecordEvent) AnomalyLabels() []string  { return nil }
+func (s stubRecordEvent) EventType() string       { return "stub" }
+func (s stubRecordEvent) Payload() any            { return s.record }
+func (s stubRecordEvent) AnomalyLabels() []string { return nil }
+func (s stubRecordEvent) ValidationValue(field string) (any, bool) {
+	value, ok := s.record[field]
+	return value, ok
+}
 
 func TestNewRuleEngineErrorsOnMissingOrInvalidFile(t *testing.T) {
 	if _, err := NewRuleEngine(filepath.Join(t.TempDir(), "missing.json")); err == nil {
@@ -56,6 +61,21 @@ func TestNewRuleEngineErrorsOnMissingOrInvalidFile(t *testing.T) {
 	}
 	if _, err := NewRuleEngine(specPath); err == nil {
 		t.Fatalf("NewRuleEngine() invalid json error = nil, want non-nil")
+	}
+}
+
+func TestNewRuleEngineInitializesEmptyBoundsMap(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "spec.json")
+	if err := os.WriteFile(specPath, []byte(`{"required_fields":["temperature"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	engine, err := NewRuleEngine(specPath)
+	if err != nil {
+		t.Fatalf("NewRuleEngine() error = %v", err)
+	}
+	if engine.Spec.Bounds == nil {
+		t.Fatalf("Spec.Bounds = nil, want initialized map")
 	}
 }
 
@@ -101,13 +121,15 @@ func TestAsFloat64AndGetFloatNumber(t *testing.T) {
 		"empty": "   ",
 	}
 
-	if got, ok, errMsg := getFloatNumber(record, "good"); !ok || errMsg != "" || got != 9 {
+	sample := stubRecordEvent{record: record}
+
+	if got, ok, errMsg := getFloatNumber(sample, "good"); !ok || errMsg != "" || got != 9 {
 		t.Fatalf("getFloatNumber(good) = (%v, %v, %q), want (9, true, \"\")", got, ok, errMsg)
 	}
-	if _, ok, errMsg := getFloatNumber(record, "bad"); ok || errMsg == "" {
+	if _, ok, errMsg := getFloatNumber(sample, "bad"); ok || errMsg == "" {
 		t.Fatalf("getFloatNumber(bad) = ok:%v err:%q, want ok:false and non-empty err", ok, errMsg)
 	}
-	if _, ok, errMsg := getFloatNumber(record, "empty"); ok || errMsg != "" {
+	if _, ok, errMsg := getFloatNumber(sample, "empty"); ok || errMsg != "" {
 		t.Fatalf("getFloatNumber(empty) = ok:%v err:%q, want ok:false and empty err", ok, errMsg)
 	}
 }
@@ -149,5 +171,32 @@ func TestValidateAddsErrorsForInvalidOperatorAndNonNumericField(t *testing.T) {
 	}
 	if len(result.Errors) < 2 {
 		t.Fatalf("Validate() errors = %v, want at least 2", result.Errors)
+	}
+}
+
+func TestValidateChecksRequiredFieldsAndBounds(t *testing.T) {
+	min := 10.0
+	max := 20.0
+	engine := &RuleEngine{
+		Spec: ValidationSpec{
+			RequiredFields: []string{"temperature", "timestamp"},
+			Bounds: map[string]Bounds{
+				"temperature": {Min: &min, Max: &max},
+			},
+		},
+	}
+
+	result := engine.Validate(stubRecordEvent{
+		record: map[string]any{
+			"temperature": 25.0,
+			"timestamp":   "   ",
+		},
+	})
+
+	if result.Valid {
+		t.Fatalf("Validate() Valid = true, want false")
+	}
+	if len(result.Errors) < 2 {
+		t.Fatalf("Validate() errors = %v, want missing field and bounds errors", result.Errors)
 	}
 }

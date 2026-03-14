@@ -48,6 +48,40 @@ export interface ManagedWebSocket extends WebSocket {
 	_queue: string[];
 }
 
+// description: Builds the HTTP API base URL used for ingest status and metric requests.
+// input: Reads the Vite env override or mirrors the websocket host and port.
+// output: Returns the ingest API base URL string.
+export function getDefaultIngestAPIBaseURL(): string {
+	const envURL = import.meta.env.VITE_INGEST_API_BASE_URL as string | undefined;
+	if (envURL && envURL.trim() !== "") {
+		return envURL.replace(/\/+$/, "");
+	}
+
+	const websocketURL = import.meta.env.VITE_INGEST_WS_URL as string | undefined;
+	if (websocketURL && websocketURL.trim() !== "") {
+		const parsed = new URL(websocketURL);
+		parsed.protocol = parsed.protocol === "wss:" ? "https:" : "http:";
+		parsed.pathname =
+			(import.meta.env.VITE_INGEST_API_PATH as string | undefined)?.trim() ||
+			"/api/v1";
+		parsed.search = "";
+		parsed.hash = "";
+		return parsed.toString().replace(/\/+$/, "");
+	}
+
+	const protocol = window.location.protocol;
+	const host = window.location.hostname || "127.0.0.1";
+	const configuredPort =
+		(import.meta.env.VITE_INGEST_WS_PORT as string | undefined)?.trim() || "8080";
+	const configuredPath =
+		(import.meta.env.VITE_INGEST_API_PATH as string | undefined)?.trim() ||
+		"/api/v1";
+	const normalizedPath = configuredPath.startsWith("/")
+		? configuredPath
+		: `/${configuredPath}`;
+	return `${protocol}//${host}:${configuredPort}${normalizedPath}`.replace(/\/+$/, "");
+}
+
 // description: Builds the websocket URL used by the frontend stream client.
 // input: Reads the Vite env override or current browser location.
 // output: Returns the websocket endpoint string.

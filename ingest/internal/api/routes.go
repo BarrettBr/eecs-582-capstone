@@ -1,5 +1,38 @@
 package api
 
+/*
+Name: ingest/internal/api/routes.go
+Description: Registers the shared ingest API endpoints and provides small JSON response helpers.
+Programmer: Barrett Brown
+Date Created: 2026-03-07
+Dates Revised: 2026-03-13
+Revision History:
+- 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
+- 2026-03-13, Barrett Brown: Added clearer route registration and response helper comments.
+Preconditions:
+- A shared HTTP registrar is available to mount handlers.
+- API base path is normalized before registration.
+Acceptable Input Values/Types:
+- Route config with base path, query access, and optional status provider.
+- JSON serializable response payloads.
+Unacceptable Input Values/Types:
+- Nil registrar.
+- Non serializable response payloads.
+Postconditions:
+- Registers the ingest API handlers and returns key route paths.
+Return Values/Types:
+- RegisterRoutes: Registration
+- Response helpers write HTTP responses directly.
+Error/Exception Conditions:
+- JSON marshal failures return 500 responses.
+Side Effects:
+- Registers handlers on the shared HTTP mux and writes logs for response errors.
+Invariants:
+- Registered route paths match the returned Registration values.
+Known Faults:
+- Response helpers still do one marshal per response payload.
+*/
+
 import (
 	"encoding/json"
 	"log"
@@ -7,6 +40,7 @@ import (
 	"path"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	ingestruntime "github.com/BarrettBr/eecs-582-capstone/internal/ingest/runtime"
 )
 
 // HTTPRegistrar is implemented by components that expose RegisterHTTPHandler.
@@ -18,34 +52,49 @@ type HTTPRegistrar interface {
 type Config struct {
 	BasePath string
 	Queries  *database.Queries
+	Status   StatusProvider
 }
 
 // Registration contains important registered endpoint paths for logging.
 type Registration struct {
-	PingPath    string
-	HistoryPath string
-	ReportPath  string
+	PingPath             string
+	HistoryPath          string
+	ReportPath           string
+	IngestionStatusPath  string
+	IngestionMetricsPath string
 }
 
 type apiConfig struct {
 	basePath string
 	queries  *database.Queries
+	status   StatusProvider
 }
 
-// RegisterRoutes registers versioned API handlers on the shared ingest server mux.
+type StatusProvider interface {
+	StatusSnapshot() ingestruntime.SystemStatusSnapshot
+}
+
+// description: Mounts the ingest API routes on the shared HTTP registrar.
+// input: HTTP registrar plus base path, query service, and optional status provider.
+// output: Returns the final registered route paths for logging and startup output.
 func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 	apiCfg := &apiConfig{
 		basePath: cfg.BasePath,
 		queries:  cfg.Queries,
+		status:   cfg.Status,
 	}
 
 	pingPath := path.Join(apiCfg.basePath, "ping")
 	historyPath := path.Join(apiCfg.basePath, "history", "{kind}", "{window}")
 	reportPath := path.Join(apiCfg.basePath, "report", "{kind}", "{window}")
+	ingestionStatusPath := path.Join(apiCfg.basePath, "ingestion", "status")
+	ingestionMetricsPath := path.Join(apiCfg.basePath, "ingestion", "metrics")
 	routes := map[string]http.HandlerFunc{
-		"GET " + pingPath:    apiCfg.pingHandler,
-		"GET " + historyPath: apiCfg.historyHandler,
-		"GET " + reportPath:  apiCfg.reportHandler,
+		"GET " + pingPath:             apiCfg.pingHandler,
+		"GET " + historyPath:          apiCfg.historyHandler,
+		"GET " + reportPath:           apiCfg.reportHandler,
+		"GET " + ingestionStatusPath:  apiCfg.ingestionStatusHandler,
+		"GET " + ingestionMetricsPath: apiCfg.ingestionMetricsHandler,
 	}
 
 	for pattern, handler := range routes {
@@ -54,16 +103,24 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 
 	// Pass back to echo to the server different endpoints
 	return Registration{
-		PingPath:    pingPath,
-		HistoryPath: historyPath,
-		ReportPath:  reportPath,
+		PingPath:             pingPath,
+		HistoryPath:          historyPath,
+		ReportPath:           reportPath,
+		IngestionStatusPath:  ingestionStatusPath,
+		IngestionMetricsPath: ingestionMetricsPath,
 	}
 }
 
+// description: Returns a simple health response for API reachability checks.
+// input: HTTP response writer and request for the ping endpoint.
+// output: Writes a small JSON pong payload.
 func (cfg *apiConfig) pingHandler(w http.ResponseWriter, _ *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "pong"})
 }
 
+// description: Writes a JSON error response and logs server side errors when present.
+// input: HTTP response writer, status code, public message, and optional internal error.
+// output: Sends a JSON error body to the client.
 func respondWithError(w http.ResponseWriter, status_code int, msg string, err error) {
 	if err != nil {
 		log.Println(err)
@@ -80,6 +137,9 @@ func respondWithError(w http.ResponseWriter, status_code int, msg string, err er
 	})
 }
 
+// description: Marshals one payload as JSON and writes it to the response.
+// input: HTTP response writer, status code, and JSON serializable payload.
+// output: Sends a JSON response body or a 500 error on marshal failure.
 func respondWithJSON(w http.ResponseWriter, status_code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)

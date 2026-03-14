@@ -1,13 +1,13 @@
-package ingest_test
+package validation_test
 
 /*
-Name: ingest/internal/ingest/validation_test.go
-Description: External test for rule loading and record based validation behavior.
+Name: ingest/internal/ingest/validation/engine_test.go
+Description: External test for rule loading and record based validation behavior in the validation package.
 Programmer: Barrett Brown
-Date Created: 2026-02-28
-Dates Revised: 2026-02-28
+Date Created: 2026-03-14
+Dates Revised: 2026-03-14
 Revision History:
-- 2026-02-28, Barrett Brown: Created external validation coverage test.
+- 2026-03-14, Barrett Brown: Added external validation coverage after removing the old root ingest compatibility layer.
 Preconditions:
 - Temporary files can be written for validation spec loading.
 Acceptable Input Values/Types:
@@ -35,7 +35,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
+	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
+	ingestvalidation "github.com/BarrettBr/eecs-582-capstone/internal/ingest/validation"
 )
 
 func TestRuleEngineValidateUsesRecordEvent(t *testing.T) {
@@ -60,12 +61,12 @@ func TestRuleEngineValidateUsesRecordEvent(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	engine, err := ingest.NewRuleEngine(specPath)
+	engine, err := ingestvalidation.NewRuleEngine(specPath)
 	if err != nil {
 		t.Fatalf("NewRuleEngine() error = %v", err)
 	}
 
-	valid := engine.Validate(ingest.TempSample{
+	valid := engine.Validate(ingestevents.TempSample{
 		Timestamp:   "2026-02-28T12:00:00Z",
 		Temperature: 72.0,
 	})
@@ -76,7 +77,7 @@ func TestRuleEngineValidateUsesRecordEvent(t *testing.T) {
 		t.Fatalf("expected temperature_high anomaly, got %v", valid.Anomalies)
 	}
 
-	invalid := engine.Validate(ingest.TempSample{})
+	invalid := engine.Validate(ingestevents.TempSample{})
 	if invalid.Valid {
 		t.Fatalf("expected invalid sample")
 	}
