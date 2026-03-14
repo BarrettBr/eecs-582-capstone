@@ -14,6 +14,7 @@ import { defineStore } from "pinia";
 import {
 	close as closeSocket,
 	connect as connectSocket,
+	getDefaultIngestAPIBaseURL,
 	getDefaultStreamURL,
 	onBatch,
 	send as sendSocket,
@@ -84,6 +85,12 @@ export const useSystemStore = defineStore("system", () => {
 		labels: string[];
 		score?: number;
 		raw_response: unknown;
+	}
+
+	interface IngestionMetricsResponse {
+		temp_records?: number;
+		valve_records?: number;
+		total_records?: number;
 	}
 
 	interface ChartBucket {
@@ -219,6 +226,34 @@ export const useSystemStore = defineStore("system", () => {
 			generated_at_ms: generatedAtMs,
 			display_time: formatDisplayTime(generatedAtMs),
 		};
+	}
+
+	// description: Loads the persisted ingest totals so the dashboard metric starts from the database count.
+	// input: No arguments; uses the configured ingest API endpoint.
+	// output: Updates the total record metric when the request succeeds.
+	async function loadInitialMetrics(): Promise<void> {
+		try {
+			const response = await fetch(
+				`${getDefaultIngestAPIBaseURL()}/ingestion/metrics`,
+			);
+			if (!response.ok) {
+				throw new Error(`status ${response.status}`);
+			}
+
+			const payload =
+				(await response.json()) as IngestionMetricsResponse;
+			if (
+				typeof payload.total_records === "number" &&
+				Number.isFinite(payload.total_records) &&
+				payload.total_records >= 0
+			) {
+				metrics.value.totalRecords = payload.total_records;
+			}
+			status.value.api = "Online";
+		} catch (error) {
+			console.error("Failed to load ingest metrics", error);
+			status.value.api = "Offline";
+		}
 	}
 
 	function alignBucketStart(timestampMs: number): number {
@@ -583,6 +618,8 @@ export const useSystemStore = defineStore("system", () => {
 	// output: Connects the store to live ingest updates.
 	async function startStream() {
 		if (socket) return; // Prevent duplicate connections
+
+		await loadInitialMetrics();
 
 		const streamURL = getDefaultStreamURL();
 		console.log("Attempting websocket connection", streamURL);

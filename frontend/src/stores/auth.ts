@@ -19,12 +19,36 @@ interface AuthState {
 	error: string | null;
 }
 
+const AUTH_STORAGE_KEY = "auth";
+
+function loadStoredAuth(): Pick<AuthState, "username" | "token"> {
+	try {
+		const parsed = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || "{}");
+		return {
+			username: typeof parsed.username === "string" ? parsed.username : null,
+			token: typeof parsed.token === "string" ? parsed.token : null,
+		};
+	} catch {
+		return {
+			username: null,
+			token: null,
+		};
+	}
+}
+
+function saveStoredAuth(state: Pick<AuthState, "username" | "token">) {
+	localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
+}
+
 export const useAuthStore = defineStore("auth", {
-	state: (): AuthState => ({
-		username: null,
-		token: null,
-		error: null,
-	}),
+	state: (): AuthState => {
+		const stored = loadStoredAuth();
+		return {
+			username: stored.username,
+			token: stored.token,
+			error: null,
+		};
+	},
 
 	actions: {
 		async login(username: string, password: string) {
@@ -34,6 +58,7 @@ export const useAuthStore = defineStore("auth", {
 				const token = response.data.token; // adjust to your API
 				this.username = username;
 				this.token = token;
+				saveStoredAuth({ username: this.username, token: this.token });
 
 				router.push("/dashboard"); // optional, can be in component
 			} catch (err: any) {
@@ -50,6 +75,7 @@ export const useAuthStore = defineStore("auth", {
 			}
 			this.username = null;
 			this.token = null;
+			saveStoredAuth({ username: null, token: null });
 			router.push("/login");
 		},
 	},
@@ -57,9 +83,5 @@ export const useAuthStore = defineStore("auth", {
 	getters: {
 		isLoggedIn: (state) => !!state.token,
 		authHeader: (state) => (state.token ? `Bearer ${state.token}` : null),
-	},
-
-	persist: {
-		pick: ["token", "username"], // don't persist 'error'
 	},
 });
