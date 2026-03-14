@@ -36,7 +36,7 @@ The service works with this package like this
 ## How the rest of the service uses it
 
 - `main.go` builds `database.New(db)` once
-- The ingest package stores that query object in `ModbusLoop`
+- The ingest runtime passes that query object into the shared pipeline
 - SQL fanout uses generated methods inside a transaction for batched writes
 
 ## How to extend it

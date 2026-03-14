@@ -101,13 +101,13 @@ So whenever the service starts, it applies any new migration files.
 Queries: database.New(db),
 ```
 
-That `Queries` object is passed around and used in other packages, for example in the Modbus loop:
+That `Queries` object is passed around and used in other packages, for example in the shared ingest pipeline:
 
 ```go
-modbusLoop := ingest.NewModbusLoop(appCfg.Queries, appCfg.ModbusPollInterval)
+pipeline := ingest.NewPipeline(...)
 ```
 
-Inside that loop you can call generated methods like:
+Inside that pipeline code you can call generated methods like:
 
 ```go
 user, err := m.queries.LookupUser(ctx, "alice")

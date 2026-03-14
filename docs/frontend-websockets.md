@@ -6,11 +6,13 @@ This is the quick guide for using the ingest websocket stream from the frontend.
 
 The frontend connects to the ingest service over websocket, receives batched messages, and can also send messages back when needed.
 
+If you need the backend websocket server responsibilities, registration points, or backend-side handler examples, use `docs/ingest-stream-package.md`.
+
 ## Where the helper is
 
 The shared frontend helper lives at:
 
-- `web/src/utils/wsHelper.ts`
+- `frontend/src/utils/wsHelper.ts`
 
 This helper handles:
 
@@ -166,4 +168,5 @@ If you do not see those:
 ## Development notes
 
 - If you add new frontend request kinds, document the `kind` name and payload shape
-- If the websocket contract changes, update both the helper consumers and the backend stream package at the same time so the system doesn't fall out of sync view `ingest-stream-package.md` for how to add a new stream to consume
+- If the websocket contract changes, update both the helper consumers and the backend stream package at the same time so the system does not fall out of sync
+- For backend stream registration and transport details, see `docs/ingest-stream-package.md`

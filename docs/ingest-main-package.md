@@ -14,8 +14,10 @@ When the ingest service starts, `ingest/main.go` does this in order
 2. Opens the SQLite database
 3. Runs goose migrations
 4. Starts the websocket stream server
-5. Builds the Modbus loop
-6. Runs the Modbus loop until shutdown
+5. Builds the shared downstream pipeline
+6. Builds the `BufferManager`
+7. Builds the registrar with the current source catalog
+8. Runs the registrar until shutdown
 
 ## What it owns
 
@@ -24,13 +26,16 @@ When the ingest service starts, `ingest/main.go` does this in order
 - Database migration bootstrapping
 - Shared shutdown context
 - Logging startup state
+- Websocket control handler registration
+- API status registration
 
 ## What it does not own
 
 - Parsing env values
 - SQL query definitions
-- Modbus data normalization
+- Modbus and simulator data normalization
 - Validation rules
+- Buffering and overload control logic
 - Websocket batching logic
 
 Those live in the internal packages.
@@ -52,3 +57,4 @@ Keep this file focused on wiring. If logic starts getting specific or stateful, 
 - If startup is failing, check this file first because it controls the service boot order.
 - If a new package needs config, add it in the config package first, then pass it through here.
 - If a service should shut down with the app, make sure it uses the same shared context.
+- This file should stay a wiring layer. Registrar, `BufferManager`, and pipeline policies belong in `internal/ingest`, not in `main`.

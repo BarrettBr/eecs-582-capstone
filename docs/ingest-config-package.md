@@ -35,8 +35,6 @@ That config struct is then passed into the main package and used to start the re
   - Simple string fallback helper
 - `getDurationEnv`
   - Parses duration strings like `25ms`
-- `getUint16Env`
-  - Used for Modbus address values
 - `getIntEnv`
   - Used for batch and sampling counts
 - `getBoolEnv`
