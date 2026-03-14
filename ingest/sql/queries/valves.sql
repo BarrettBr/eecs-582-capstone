@@ -16,3 +16,7 @@ WHERE id = ?;
 -- name: GetAllValveSamples :many
 SELECT id, timestamp, sensor_type, valve_number, is_open, flow_rate
 FROM valve_samples;
+
+-- name: GetValveSampleCount :one
+SELECT COUNT(*) AS count
+FROM valve_samples;

@@ -48,7 +48,7 @@ import (
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/api"
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
-	"github.com/BarrettBr/eecs-582-capstone/internal/ingest"
+	ingestruntime "github.com/BarrettBr/eecs-582-capstone/internal/ingest/runtime"
 	"github.com/BarrettBr/eecs-582-capstone/internal/stream"
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
@@ -82,21 +82,26 @@ func main() {
 		BatchSize:          appCfg.Stream.BatchSize,
 		BatchFlushInterval: appCfg.Stream.BatchFlushInterval,
 	})
-	modbusLoop, err := ingest.NewModbusLoop(
-		ingest.Dependencies{
-			DB:       appCfg.DB,
-			Queries:  appCfg.Queries,
-			Streamer: wsServer,
-		},
-		ingest.LoopConfig{
-			PollInterval: appCfg.Ingest.PollInterval,
-			Sources:      appCfg.Sources.Sources,
-			MLFanout:     appCfg.Ingest.MLFanout,
-			SQLFanout:    appCfg.Ingest.SQLFanout,
-		},
-	)
+	pipeline, err := ingestruntime.NewPipeline(ingestruntime.PipelineDependencies{
+		DB:       appCfg.DB,
+		Queries:  appCfg.Queries,
+		Streamer: wsServer,
+	}, ingestruntime.PipelineConfig{
+		MLFanout:  appCfg.Ingest.MLFanout,
+		SQLFanout: appCfg.Ingest.SQLFanout,
+	})
 	if err != nil {
-		log.Fatalf("Error creating ingest loop: %v", err)
+		log.Fatalf("Error creating ingest pipeline: %v", err)
+	}
+	bufferManager := ingestruntime.NewBufferManager(pipeline, appCfg.Sources.Runtime.Buffering, appCfg.Ingest.BufferChunkSize)
+	registrar, err := ingestruntime.NewRegistrar(ingestruntime.RegistrarConfig{
+		SourceConfigPath:      appCfg.Ingest.SourceConfigPath,
+		DefaultModbusInterval: appCfg.Ingest.PollInterval,
+		InitialCatalog:        appCfg.Sources,
+		BufferManager:         bufferManager,
+	})
+	if err != nil {
+		log.Fatalf("Error creating registrar: %v", err)
 	}
 
 	type faultInjectRequest struct {
@@ -110,7 +115,7 @@ func main() {
 				return
 			}
 		}
-		if err := modbusLoop.TriggerFaultInjection(req.SourceName); err != nil {
+		if err := registrar.TriggerFaultInjection(req.SourceName); err != nil {
 			log.Printf("Fault injection request failed: %v", err)
 			return
 		}
@@ -119,6 +124,7 @@ func main() {
 	apiRegistration := api.RegisterRoutes(wsServer, api.Config{
 		BasePath: appCfg.Stream.APIBasePath,
 		Queries:  appCfg.Queries,
+		Status:   registrar,
 	})
 
 	go func() {
@@ -126,12 +132,14 @@ func main() {
 			log.Printf("Websocket server error: %v", err)
 		}
 	}()
+	go pipeline.Run(ctx)
+	go bufferManager.Run(ctx)
 
-	log.Printf("Modbus service ready. Poll interval: %s", appCfg.Ingest.PollInterval)
+	log.Printf("Ingest registrar ready. Default Modbus poll interval: %s", appCfg.Ingest.PollInterval)
 	log.Printf("API ready at http://%s%s", appCfg.Stream.Address, apiRegistration.PingPath)
 	log.Printf("Websocket stream ready at %s", wsServer.URL())
-	if err := modbusLoop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		log.Fatalf("Error running ingest loop: %v", err)
+	if err := registrar.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		log.Fatalf("Error running ingest registrar: %v", err)
 	}
 }
 

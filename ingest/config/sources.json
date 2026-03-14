@@ -1,4 +1,23 @@
 {
+  "runtime": {
+    "buffering": {
+      "shared_units": 256,
+      "sampling_shared_threshold": 0.8,
+      "pressure": {
+        "elevated_enter": 0.7,
+        "elevated_exit": 0.5,
+        "high_enter": 0.85,
+        "high_exit": 0.65,
+        "critical_enter": 0.95,
+        "critical_exit": 0.8
+      }
+    }
+  },
+  "profiles": {
+    "modbus": {
+      "enabled_sources": ["temp_plc"]
+    }
+  },
   "sources": [
     {
       "name": "temp_dev",
@@ -8,8 +27,19 @@
       "validation_file": "config/validation/temperature.json",
       "sql_target": "temp_samples",
       "ml_enabled": true,
+      "flow_control": {
+        "reserved_units": 64,
+        "adaptive_enabled": true,
+        "supports_backpressure": true,
+        "overload_policy": "drop_oldest",
+        "sampling_every_n": 4,
+        "backpressure": {
+          "high_interval_multiplier": 2,
+          "critical_interval_multiplier": 4
+        }
+      },
       "simulator": {
-        "interval": "100ms",
+        "interval": "10us",
         "seed": 42,
         "profile": "temperature_default"
       }
@@ -22,6 +52,17 @@
       "validation_file": "config/validation/temperature.json",
       "sql_target": "temp_samples",
       "ml_enabled": true,
+      "flow_control": {
+        "reserved_units": 64,
+        "adaptive_enabled": true,
+        "supports_backpressure": true,
+        "overload_policy": "drop_oldest",
+        "sampling_every_n": 4,
+        "backpressure": {
+          "high_interval_multiplier": 2,
+          "critical_interval_multiplier": 4
+        }
+      },
       "modbus": {
         "address": "127.0.0.1:1502",
         "mw_base": 1024,
@@ -37,6 +78,17 @@
       "validation_file": "config/validation/valve.json",
       "sql_target": "valve_samples",
       "ml_enabled": true,
+      "flow_control": {
+        "reserved_units": 64,
+        "adaptive_enabled": true,
+        "supports_backpressure": true,
+        "overload_policy": "drop_oldest",
+        "sampling_every_n": 4,
+        "backpressure": {
+          "high_interval_multiplier": 2,
+          "critical_interval_multiplier": 4
+        }
+      },
       "modbus": {
         "address": "127.0.0.1:1502",
         "mw_base": 1100,

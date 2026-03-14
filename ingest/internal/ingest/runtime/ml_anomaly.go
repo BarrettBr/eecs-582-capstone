@@ -1,7 +1,7 @@
-package ingest
+package runtime
 
 /*
-Name: ingest/internal/ingest/ml_anomaly.go
+Name: ingest/internal/ingest/runtime/ml_anomaly.go
 Description: Defines a stable ML anomaly payload shape and helpers to normalize ML responses into it.
 Programmer: Barrett Brown
 Date Created: 2026-03-01
@@ -183,4 +183,35 @@ func dedupeStrings(values []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+func asFloat64(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }

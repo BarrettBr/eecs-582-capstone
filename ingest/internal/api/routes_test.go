@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
+	ingestruntime "github.com/BarrettBr/eecs-582-capstone/internal/ingest/runtime"
 	_ "modernc.org/sqlite"
 )
 
@@ -15,8 +16,18 @@ type muxRegistrar struct {
 	mux *http.ServeMux
 }
 
+type stubStatusProvider struct{}
+
 func (m muxRegistrar) RegisterHTTPHandler(pattern string, handler http.HandlerFunc) {
 	m.mux.HandleFunc(pattern, handler)
+}
+
+func (stubStatusProvider) StatusSnapshot() ingestruntime.SystemStatusSnapshot {
+	return ingestruntime.SystemStatusSnapshot{
+		PressureState:       ingestruntime.PressureHigh,
+		SharedUnitsUsed:     2,
+		SharedUnitsCapacity: 4,
+	}
 }
 
 func TestRegisterRoutesAddsPingEndpoint(t *testing.T) {
@@ -87,6 +98,52 @@ func TestRegisterRoutesReportDispatchesToSpecificHandler(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "\"summary\":") {
 		t.Fatalf("body = %q, want report summary payload", body)
+	}
+}
+
+func TestRegisterRoutesAddsIngestionStatusEndpoint(t *testing.T) {
+	mux := http.NewServeMux()
+	registration := RegisterRoutes(muxRegistrar{mux: mux}, Config{
+		BasePath: "/api/v1",
+		Status:   stubStatusProvider{},
+	})
+
+	if registration.IngestionStatusPath != "/api/v1/ingestion/status" {
+		t.Fatalf("registration.IngestionStatusPath = %q, want %q", registration.IngestionStatusPath, "/api/v1/ingestion/status")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ingestion/status", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "\"pressure_state\":\"high\"") {
+		t.Fatalf("body = %q, want pressure status payload", body)
+	}
+}
+
+func TestRegisterRoutesAddsIngestionMetricsEndpoint(t *testing.T) {
+	mux := http.NewServeMux()
+	registration := RegisterRoutes(muxRegistrar{mux: mux}, Config{
+		BasePath: "/api/v1",
+		Queries:  openAPITestQueries(t),
+	})
+
+	if registration.IngestionMetricsPath != "/api/v1/ingestion/metrics" {
+		t.Fatalf("registration.IngestionMetricsPath = %q, want %q", registration.IngestionMetricsPath, "/api/v1/ingestion/metrics")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ingestion/metrics", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != "{\"temp_records\":0,\"valve_records\":0,\"total_records\":0}" {
+		t.Fatalf("body = %q, want %q", body, "{\"temp_records\":0,\"valve_records\":0,\"total_records\":0}")
 	}
 }
 

@@ -1,7 +1,7 @@
-package ingest
+package runtime
 
 /*
-Name: ingest/internal/ingest/ml_anomaly_test.go
+Name: ingest/internal/ingest/runtime/ml_anomaly_test.go
 Description: Tests ML anomaly normalization so frontend payloads keep a stable schema.
 Programmer: Barrett Brown
 Date Created: 2026-03-01
@@ -74,5 +74,26 @@ func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
 	}
 	if payload.EventType != "valve" {
 		t.Fatalf("EventType = %q, want %q", payload.EventType, "valve")
+	}
+}
+
+func TestNormalizeMLAnomalyPayloadExtractsNestedLabelsAndScoreOnce(t *testing.T) {
+	raw := []byte(`{"result":{"labels":[" overheat ","overheat","pressure"],"score":0.88}}`)
+	parsed := map[string]any{
+		"result": map[string]any{
+			"labels": []any{" overheat ", "overheat", "pressure"},
+			"score":  0.88,
+		},
+	}
+
+	payload := normalizeMLAnomalyPayload("temperature", parsed, raw)
+	if !payload.HasAnomaly {
+		t.Fatalf("HasAnomaly = false, want true")
+	}
+	if len(payload.Labels) != 2 || payload.Labels[0] != "overheat" || payload.Labels[1] != "pressure" {
+		t.Fatalf("Labels = %v, want [overheat pressure]", payload.Labels)
+	}
+	if payload.Score == nil || *payload.Score != 0.88 {
+		t.Fatalf("Score = %v, want 0.88", payload.Score)
 	}
 }

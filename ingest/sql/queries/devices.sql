@@ -16,3 +16,7 @@ WHERE id = ?;
 -- name: GetAllTempSamples :many
 SELECT id, timestamp, sensor_type, sensor_number, fan_on, temperature, heater_power
 FROM temp_samples;
+
+-- name: GetTempSampleCount :one
+SELECT COUNT(*) AS count
+FROM temp_samples;

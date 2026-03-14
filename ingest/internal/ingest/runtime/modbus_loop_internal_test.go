@@ -1,7 +1,7 @@
-package ingest
+package runtime
 
 /*
-Name: ingest/internal/ingest/modbus_loop_internal_test.go
+Name: ingest/internal/ingest/runtime/modbus_loop_internal_test.go
 Description: Tests Modbus payload normalization and sensor type mapping helpers.
 Programmer: Barrett Brown
 Date Created: 2026-02-28
@@ -24,7 +24,7 @@ Error/Exception Conditions:
 Side Effects:
 - Reads current system time through normalization timestamp generation.
 Invariants:
-- dataNormalizer should only accept the expected payload size.
+- normalizeTemperatureRegisters should only accept the expected payload size.
 Known Faults:
 - Does not cover every field combination that could be encoded in the payload.
 */
@@ -44,38 +44,37 @@ func TestDataNormalizerPopulatesTempSample(t *testing.T) {
 	binary.BigEndian.PutUint16(payload[8:10], 725)
 	binary.BigEndian.PutUint16(payload[10:12], 5050)
 
-	loop := &ModbusLoop{}
-	if err := loop.dataNormalizer(payload[:]); err != nil {
-		t.Fatalf("dataNormalizer() error = %v", err)
+	sample, err := normalizeTemperatureRegisters(payload[:])
+	if err != nil {
+		t.Fatalf("normalizeTemperatureRegisters() error = %v", err)
 	}
 
-	if loop.sample.ID != 9 {
-		t.Fatalf("sample.ID = %d, want 9", loop.sample.ID)
+	if sample.ID != 9 {
+		t.Fatalf("sample.ID = %d, want 9", sample.ID)
 	}
-	if loop.sample.SensorType != "temperature_control_system" {
-		t.Fatalf("sample.SensorType = %q", loop.sample.SensorType)
+	if sample.SensorType != "temperature_control_system" {
+		t.Fatalf("sample.SensorType = %q", sample.SensorType)
 	}
-	if loop.sample.Temperature != 72.5 {
-		t.Fatalf("sample.Temperature = %v, want 72.5", loop.sample.Temperature)
+	if sample.Temperature != 72.5 {
+		t.Fatalf("sample.Temperature = %v, want 72.5", sample.Temperature)
 	}
-	if loop.sample.HeaterPower != 50.5 {
-		t.Fatalf("sample.HeaterPower = %v, want 50.5", loop.sample.HeaterPower)
+	if sample.HeaterPower != 50.5 {
+		t.Fatalf("sample.HeaterPower = %v, want 50.5", sample.HeaterPower)
 	}
-	if _, err := time.Parse(time.RFC3339Nano, loop.sample.Timestamp); err != nil {
+	if _, err := time.Parse(time.RFC3339Nano, sample.Timestamp); err != nil {
 		t.Fatalf("sample.Timestamp parse error = %v", err)
 	}
 }
 
 func TestDataNormalizerRejectsBadPayloadAndSensorType(t *testing.T) {
-	loop := &ModbusLoop{}
-	if err := loop.dataNormalizer([]byte{1, 2}); err == nil {
-		t.Fatalf("dataNormalizer() short payload error = nil, want non-nil")
+	if _, err := normalizeTemperatureRegisters([]byte{1, 2}); err == nil {
+		t.Fatalf("normalizeTemperatureRegisters() short payload error = nil, want non-nil")
 	}
 
 	var payload [12]byte
 	binary.BigEndian.PutUint16(payload[2:4], 99)
-	if err := loop.dataNormalizer(payload[:]); err == nil {
-		t.Fatalf("dataNormalizer() unsupported sensor type error = nil, want non-nil")
+	if _, err := normalizeTemperatureRegisters(payload[:]); err == nil {
+		t.Fatalf("normalizeTemperatureRegisters() unsupported sensor type error = nil, want non-nil")
 	}
 }
 
