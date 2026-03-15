@@ -5,10 +5,11 @@ Name: ingest/internal/ingest/runtime/service_test.go
 Description: Tests managed service pressure behavior, snapshots, and fault injection handling.
 Programmer: Barrett Brown
 Date Created: 2026-03-14
-Dates Revised: 2026-03-14
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-14, Barrett Brown: Added managed service behavior coverage tests.
 - 2026-03-14, Barrett Brown: Added normalized fingerprint coverage for definition matching.
+- 2026-03-15, Barrett Brown: Added fixed-rate deadline scheduling coverage.
 Preconditions:
 - Test source definitions point to valid validation files.
 Acceptable Input Values/Types:
@@ -136,6 +137,30 @@ func TestManagedServiceMatchesDefinitionUsesNormalizedFingerprint(t *testing.T) 
 	}
 	if service.MatchesDefinition(changedInterval) {
 		t.Fatalf("MatchesDefinition() = true, want false when simulator interval changes")
+	}
+}
+
+func TestNextFixedRateDeadlineKeepsCadenceWhenWorkFinishesEarly(t *testing.T) {
+	start := time.Unix(0, 0)
+	interval := 100 * time.Millisecond
+	now := start.Add(25 * time.Millisecond)
+
+	got := nextFixedRateDeadline(start, now, interval)
+	want := start.Add(interval)
+	if got != want {
+		t.Fatalf("nextFixedRateDeadline() = %s, want %s", got, want)
+	}
+}
+
+func TestNextFixedRateDeadlineSkipsAheadWhenBehind(t *testing.T) {
+	start := time.Unix(0, 0)
+	interval := 100 * time.Millisecond
+	now := start.Add(350 * time.Millisecond)
+
+	got := nextFixedRateDeadline(start, now, interval)
+	want := start.Add(400 * time.Millisecond)
+	if got != want {
+		t.Fatalf("nextFixedRateDeadline() = %s, want %s", got, want)
 	}
 }
 

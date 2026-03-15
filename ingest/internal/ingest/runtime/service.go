@@ -5,11 +5,12 @@ Name: ingest/internal/ingest/runtime/service.go
 Description: Runs one managed ingest service under registrar control and submits normalized events into the BufferManager.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-14
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added Base logic.
 - 2026-03-13, Barrett Brown: Added clearer managed service lifecycle comments.
 - 2026-03-14, Barrett Brown: Replaced reflect-based definition matching with an explicit normalized fingerprint.
+- 2026-03-15, Barrett Brown: Switched managed service scheduling from fixed-delay to fixed-rate deadline scheduling.
 Preconditions:
 - Managed services are created from validated source definitions.
 - Source runners and submitters are initialized before service start.
@@ -123,7 +124,7 @@ func (s *managedService) Stop() {
 	<-done
 }
 
-// description: Owns the service lifecycle loop and polls the source on its current interval.
+// description: Owns the service lifecycle loop and polls the source on a fixed-rate deadline.
 // input: service run context.
 // output: Returns when the context is canceled.
 func (s *managedService) run(ctx context.Context) {
@@ -142,12 +143,8 @@ func (s *managedService) run(ctx context.Context) {
 	s.lifecycleState = "running"
 	s.mu.Unlock()
 
-	if err := s.handleTick(ctx); err != nil && !isContextCanceled(err) {
-		s.recordError(err)
-		log.Printf("Service=%s initial tick failed: %v", s.definition.Name, err)
-	}
-
-	timer := time.NewTimer(s.interval())
+	nextRun := time.Now()
+	timer := time.NewTimer(0)
 	defer timer.Stop()
 
 	for {
@@ -159,7 +156,12 @@ func (s *managedService) run(ctx context.Context) {
 				s.recordError(err)
 				log.Printf("Service=%s tick failed: %v", s.definition.Name, err)
 			}
-			timer.Reset(s.interval())
+			nextRun = nextFixedRateDeadline(nextRun, time.Now(), s.interval())
+			delay := time.Until(nextRun)
+			if delay < 0 {
+				delay = 0
+			}
+			timer.Reset(delay)
 		}
 	}
 }
@@ -255,6 +257,23 @@ func (s *managedService) recordError(err error) {
 	if s.lifecycleState == "starting" {
 		s.lifecycleState = "failed"
 	}
+}
+
+func nextFixedRateDeadline(previous time.Time, now time.Time, interval time.Duration) time.Time {
+	if interval <= 0 {
+		return now
+	}
+	if previous.IsZero() {
+		return now.Add(interval)
+	}
+
+	next := previous.Add(interval)
+	if next.After(now) {
+		return next
+	}
+
+	missedIntervals := now.Sub(next)/interval + 1
+	return next.Add(missedIntervals * interval)
 }
 
 func sourceDefinitionFingerprint(definition config.SourceDefinition) string {

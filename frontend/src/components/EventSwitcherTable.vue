@@ -137,12 +137,14 @@ const recentEventRows = computed<EventRow[]>(() => {
 
 				<Column header="Alerts">
 					<template #body="{ data }">
-						<Tag
-							v-if="data.alerts.length"
-							:value="data.alerts.join(', ')"
-							severity="danger"
-						/>
-						<span v-else>-</span>
+						<div class="alerts-cell">
+							<Tag
+								v-if="data.alerts.length"
+								:value="data.alerts.join(', ')"
+								severity="danger"
+							/>
+							<span v-else class="alerts-empty">-</span>
+						</div>
 					</template>
 				</Column>
 			</DataTable>
@@ -189,5 +191,14 @@ const recentEventRows = computed<EventRow[]>(() => {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+}
+
+.alerts-cell {
+	min-width: 10rem;
+}
+
+.alerts-empty {
+	display: inline-block;
+	min-width: 1ch;
 }
 </style>

@@ -5,10 +5,11 @@ Name: ingest/internal/api/routes.go
 Description: Registers the shared ingest API endpoints and provides small JSON response helpers.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-13
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
 - 2026-03-13, Barrett Brown: Added clearer route registration and response helper comments.
+- 2026-03-15, Barrett Brown: Added permissive API CORS headers for frontend dev-server requests.
 Preconditions:
 - A shared HTTP registrar is available to mount handlers.
 - API base path is normalized before registration.
@@ -141,6 +142,9 @@ func respondWithError(w http.ResponseWriter, status_code int, msg string, err er
 // input: HTTP response writer, status code, and JSON serializable payload.
 // output: Sends a JSON response body or a 500 error on marshal failure.
 func respondWithJSON(w http.ResponseWriter, status_code int, payload any) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
 	if payload == nil {

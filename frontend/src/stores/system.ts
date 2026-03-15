@@ -4,6 +4,7 @@
 // Creation Date: 3/1
 // Revision Dates: 3/15 Barrett Brown
 // Revision Notes: 3/15 Barrett Brown added aggregated websocket service rate handling for sidebar labels.
+// Revision Notes: 3/15 Barrett Brown decoupled API health from websocket disconnect state in the status store.
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
@@ -340,7 +341,6 @@ export const useSystemStore = defineStore("system", () => {
 			streamState.value = "Disconnected";
 			status.value.ingestion = "Disconnected";
 			status.value.ml = "Offline";
-			status.value.api = "Offline";
 			loading.value = false;
 		});
 
@@ -349,7 +349,6 @@ export const useSystemStore = defineStore("system", () => {
 			streamState.value = "Error";
 			status.value.ingestion = "Stream Error";
 			status.value.ml = "Offline";
-			status.value.api = "Offline";
 			loading.value = false;
 		});
 	}
