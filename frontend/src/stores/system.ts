@@ -110,10 +110,7 @@ export const useSystemStore = defineStore("system", () => {
 		});
 	}
 
-	function applyServiceCatalog(
-		services: ServiceCatalogEntry[],
-		_revision = "",
-	): void {
+	function applyServiceCatalog(services: ServiceCatalogEntry[]): void {
 		const previousRates = new Map(
 			availableServices.value.map((service) => [
 				service.name,
@@ -203,7 +200,7 @@ export const useSystemStore = defineStore("system", () => {
 			}
 
 			const payload = (await response.json()) as IngestionStatusResponse;
-			applyServiceCatalog(payload.services ?? [], payload.last_reload_at ?? "");
+			applyServiceCatalog(payload.services ?? []);
 			status.value.api = "Online";
 		} catch (error) {
 			console.error("Failed to load service catalog", error);
@@ -258,7 +255,7 @@ export const useSystemStore = defineStore("system", () => {
 		for (const message of batch.messages) {
 			if (message.kind === "service_catalog") {
 				const payload = message.data as ServiceCatalogPayload;
-				applyServiceCatalog(payload.services ?? [], payload.revision ?? "");
+				applyServiceCatalog(payload.services ?? []);
 				continue;
 			}
 			if (message.kind === "subscription_ack") {
