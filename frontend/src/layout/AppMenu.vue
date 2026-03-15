@@ -5,6 +5,7 @@ Creation Date: 2/25
 Revision Dates:
 - 2026-03-01, Barrett Brown: Updated /Dashboard redirect to /dashboard to match with rest of code
 - 2026-03-14, Barrett Brown: Added dynamic service menu entries backed by the live service catalog.
+- 2026-03-15, Barrett Brown: Added per-service rate labels in the sidebar service menu.
 3/1 adam berry reformat style
 Preconditions: Not Relevant
 Postconditions: Not Relevant
@@ -26,6 +27,16 @@ onMounted(() => {
 	store.loadAvailableServices();
 });
 
+function formatServiceRate(rate?: number): string | undefined {
+	if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+		return undefined;
+	}
+	if (rate >= 1000) {
+		return `${(rate / 1000).toFixed(rate >= 10000 ? 0 : 1)}k/s`;
+	}
+	return `${Math.round(rate)}/s`;
+}
+
 const serviceItems = computed<MenuItem[]>(() => {
 	if (availableServices.value.length === 0) {
 		return [
@@ -39,6 +50,7 @@ const serviceItems = computed<MenuItem[]>(() => {
 
 	return availableServices.value.map((service) => ({
 		label: service.name,
+		meta: formatServiceRate(service.admitted_eps_5s),
 		icon: "pi pi-chart-line",
 		to: `/services/${service.name}`,
 	}));

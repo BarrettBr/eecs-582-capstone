@@ -5,10 +5,11 @@ Name: ingest/internal/ingest/runtime/status.go
 Description: Defines the status payloads exposed by the registrar and BufferManager status endpoint.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-13
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added standardized prologue documentation block.
 - 2026-03-13, Barrett Brown: Added clearer status type documentation.
+- 2026-03-15, Barrett Brown: Added admitted event totals for low-overhead service rate reporting.
 Preconditions:
 - Runtime status fields are populated by registrar and BufferManager snapshots.
 Acceptable Input Values/Types:
@@ -39,6 +40,7 @@ type ServiceStatus struct {
 	ReservedUnits        int           `json:"reserved_units"`
 	BufferedUnits        int           `json:"buffered_units"`
 	QueueDepth           int           `json:"queue_depth"`
+	AdmittedEvents       uint64        `json:"admitted_events"`
 	AdaptiveEnabled      bool          `json:"adaptive_enabled"`
 	SupportsBackpressure bool          `json:"supports_backpressure"`
 	RateReduced          bool          `json:"rate_reduced"`

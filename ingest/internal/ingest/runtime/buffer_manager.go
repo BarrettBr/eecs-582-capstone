@@ -5,11 +5,12 @@ Name: ingest/internal/ingest/runtime/buffer_manager.go
 Description: Buffers ingress events per service, enforces shared unit limits, and dispatches events fairly into the shared pipeline.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-14
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added Base logic.
 - 2026-03-13, Barrett Brown: Added clearer BufferManager function comments.
 - 2026-03-14, Barrett Brown: Split the larger buffer manager into focused modules for runtime flow and queue mechanics.
+- 2026-03-15, Barrett Brown: Added cumulative admitted event counters for low-overhead service rate reporting.
 Preconditions:
 - Pipeline and buffering config are initialized before use.
 - Services submit normalized IngressEvent values through the manager.
@@ -65,6 +66,7 @@ type serviceQueueState struct {
 	queue      serviceQueue
 	queueLen   int
 	usedUnits  int
+	admitted   uint64
 	active     bool
 	sampleTick uint64
 	dropped    uint64
@@ -73,13 +75,14 @@ type serviceQueueState struct {
 }
 
 type bufferServiceSnapshot struct {
-	ReservedUnits int
-	BufferedUnits int
-	QueueDepth    int
-	Sampling      bool
-	DroppedEvents uint64
-	EvictedEvents uint64
-	SampledEvents uint64
+	ReservedUnits  int
+	BufferedUnits  int
+	QueueDepth     int
+	AdmittedEvents uint64
+	Sampling       bool
+	DroppedEvents  uint64
+	EvictedEvents  uint64
+	SampledEvents  uint64
 }
 
 type bufferSnapshot struct {

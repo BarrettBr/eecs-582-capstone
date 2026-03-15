@@ -5,11 +5,12 @@ Name: ingest/internal/ingest/runtime/buffer_manager_queue.go
 Description: BufferManager queue admission helpers, pressure snapshots, and chunked service queue primitives.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-14
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added Base logic.
 - 2026-03-13, Barrett Brown: Added clearer BufferManager function comments.
 - 2026-03-14, Barrett Brown: Split the larger buffer manager into focused modules for runtime flow and queue mechanics.
+- 2026-03-15, Barrett Brown: Counted admitted events during enqueue for low-overhead service rate snapshots.
 Preconditions:
 - Callers hold the BufferManager mutex before using the locked helper methods in this file.
 Postconditions:
@@ -48,6 +49,7 @@ func (m *BufferManager) admitLocked(service *serviceQueueState, item bufferedEve
 func (m *BufferManager) enqueueLocked(service *serviceQueueState, item bufferedEvent) {
 	service.queue.pushBack(item, m.chunkSize)
 	service.queueLen++
+	service.admitted++
 	m.adjustServiceUsageLocked(service, item.units)
 	if !service.active {
 		service.active = true
@@ -109,13 +111,14 @@ func (m *BufferManager) snapshotLocked() bufferSnapshot {
 	services := make(map[string]bufferServiceSnapshot, len(m.services))
 	for name, service := range m.services {
 		services[name] = bufferServiceSnapshot{
-			ReservedUnits: service.definition.FlowControl.ReservedUnits,
-			BufferedUnits: service.usedUnits,
-			QueueDepth:    service.queueLen,
-			Sampling:      m.samplingActiveLocked(service),
-			DroppedEvents: service.dropped,
-			EvictedEvents: service.evicted,
-			SampledEvents: service.sampled,
+			ReservedUnits:  service.definition.FlowControl.ReservedUnits,
+			BufferedUnits:  service.usedUnits,
+			QueueDepth:     service.queueLen,
+			AdmittedEvents: service.admitted,
+			Sampling:       m.samplingActiveLocked(service),
+			DroppedEvents:  service.dropped,
+			EvictedEvents:  service.evicted,
+			SampledEvents:  service.sampled,
 		}
 	}
 	return bufferSnapshot{

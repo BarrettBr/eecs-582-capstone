@@ -2,8 +2,9 @@
 // Description: Shared type definitions for the dashboard system store and helpers.
 // Programmers: Adam Berry, Barrett Brown
 // Creation Date: 3/1
-// Revision Dates: 3/14 Barrett Brown
+// Revision Dates: 3/15 Barrett Brown
 // Revision Notes: 3/14 Barrett Brown split the larger system store into focused modules.
+// Revision Notes: 3/15 Barrett Brown added aggregated service rate payload typing for sidebar labels.
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
@@ -70,6 +71,7 @@ export interface ServiceCatalogEntry {
 	name: string;
 	mode: string;
 	event_type: string;
+	admitted_eps_5s?: number;
 }
 
 export interface IngestionStatusResponse {
@@ -80,6 +82,16 @@ export interface IngestionStatusResponse {
 export interface ServiceCatalogPayload {
 	revision?: string;
 	services?: ServiceCatalogEntry[];
+}
+
+export interface ServiceRateEntry {
+	name: string;
+	admitted_eps_5s?: number;
+}
+
+export interface ServiceRatesPayload {
+	interval_seconds?: number;
+	services?: ServiceRateEntry[];
 }
 
 export interface SubscriptionAckPayload {

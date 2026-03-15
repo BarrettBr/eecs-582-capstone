@@ -2,7 +2,8 @@
 // Description: This file acts as the orchestration store for dashboard stream state and service subscriptions.
 // Programmers: Adam Berry, Barrett Brown
 // Creation Date: 3/1
-// Revision Dates: 3/14 Barrett Brown
+// Revision Dates: 3/15 Barrett Brown
+// Revision Notes: 3/15 Barrett Brown added aggregated websocket service rate handling for sidebar labels.
 // Preconditions: None
 // Postconditions: Not Relevant
 // Error Types: Not Relevant
@@ -34,6 +35,7 @@ import type {
 	MLAnomalyPayload,
 	ServiceCatalogEntry,
 	ServiceCatalogPayload,
+	ServiceRatesPayload,
 	SubscriptionAckPayload,
 	SubscriptionsPrunedPayload,
 	TempEventData,
@@ -112,12 +114,21 @@ export const useSystemStore = defineStore("system", () => {
 		services: ServiceCatalogEntry[],
 		_revision = "",
 	): void {
+		const previousRates = new Map(
+			availableServices.value.map((service) => [
+				service.name,
+				service.admitted_eps_5s ?? 0,
+			]),
+		);
 		const sortedServices = sortServices(services);
 		const availableServiceNames = new Set(
 			sortedServices.map((service) => service.name),
 		);
 
-		availableServices.value = sortedServices;
+		availableServices.value = sortedServices.map((service) => ({
+			...service,
+			admitted_eps_5s: previousRates.get(service.name) ?? 0,
+		}));
 		selectedDashboardServices.value = selectedDashboardServices.value.filter(
 			(serviceName) => availableServiceNames.has(serviceName),
 		);
@@ -143,6 +154,19 @@ export const useSystemStore = defineStore("system", () => {
 		}
 
 		syncSubscriptions();
+	}
+
+	function applyServiceRates(payload: ServiceRatesPayload): void {
+		const rateByName = new Map(
+			(payload.services ?? []).map((service) => [
+				service.name,
+				service.admitted_eps_5s ?? 0,
+			]),
+		);
+		availableServices.value = availableServices.value.map((service) => ({
+			...service,
+			admitted_eps_5s: rateByName.get(service.name) ?? 0,
+		}));
 	}
 
 	async function loadInitialMetrics(): Promise<void> {
@@ -244,6 +268,10 @@ export const useSystemStore = defineStore("system", () => {
 					selectedDashboardServices.value =
 						payload.current_services?.slice() ?? [];
 				}
+				continue;
+			}
+			if (message.kind === "service_rates") {
+				applyServiceRates(message.data as ServiceRatesPayload);
 				continue;
 			}
 			if (message.kind === "subscriptions_pruned") {

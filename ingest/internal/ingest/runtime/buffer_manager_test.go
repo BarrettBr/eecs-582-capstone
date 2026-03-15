@@ -41,6 +41,9 @@ func TestBufferManagerUsesReservedUnitsBeforeSharedUnits(t *testing.T) {
 	if sharedUsed != 1 {
 		t.Fatalf("shared used units = %d, want 1", sharedUsed)
 	}
+	if got := manager.Snapshot().Services["svc_a"].AdmittedEvents; got != 2 {
+		t.Fatalf("admitted events = %d, want 2", got)
+	}
 }
 
 func TestBufferManagerDropOldestStaysServiceLocal(t *testing.T) {

@@ -5,12 +5,13 @@ Name: ingest/internal/ingest/runtime/registrar.go
 Description: Owns service lifecycle, hot reloads the source catalog, and merges runtime status snapshots.
 Programmer: Barrett Brown
 Date Created: 2026-03-07
-Dates Revised: 2026-03-14
+Dates Revised: 2026-03-15
 Revision History:
 - 2026-03-07, Barrett Brown: Added base logic.
 - 2026-03-13, Barrett Brown: Added clearer registrar lifecycle comments.
 - 2026-03-14, Barrett Brown: Updated registrar reload matching notes to reflect the explicit service fingerprint path.
 - 2026-03-14, Barrett Brown: Added catalog-apply callbacks for websocket service pruning and catalog broadcast updates.
+- 2026-03-15, Barrett Brown: Merged admitted event totals into the runtime status snapshot for service rate reporting.
 Preconditions:
 - Source config path, initial catalog, and BufferManager are initialized.
 Acceptable Input Values/Types:
@@ -189,6 +190,7 @@ func (r *Registrar) StatusSnapshot() SystemStatusSnapshot {
 			status.ReservedUnits = bufferStatus.ReservedUnits
 			status.BufferedUnits = bufferStatus.BufferedUnits
 			status.QueueDepth = bufferStatus.QueueDepth
+			status.AdmittedEvents = bufferStatus.AdmittedEvents
 			status.Sampling = bufferStatus.Sampling
 			status.DroppedEvents = bufferStatus.DroppedEvents
 			status.EvictedEvents = bufferStatus.EvictedEvents

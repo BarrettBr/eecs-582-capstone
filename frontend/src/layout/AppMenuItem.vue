@@ -2,7 +2,8 @@
 Description: This component generates an individual secion of the nav side section
 Programmers: Adam Berry 
 Creation Date: 2/25
-Revision Dates: 3/1 
+Revision Dates: 3/1, 2026-03-15
+Revision Notes: 2026-03-15 Barrett Brown added optional sidebar metadata text for service rate labels.
 Preconditions: Not Relevant
 Postconditions: Not Relevant
 Error Types: Not Relevant
@@ -16,6 +17,7 @@ import { useLayoutStore } from "@/stores/layout";
 
 export interface MenuItem {
 	label?: string;
+	meta?: string;
 	icon?: string;
 	to?: string;
 	items?: MenuItem[];
@@ -80,6 +82,7 @@ function handleNavClick() {
 		>
 			<i v-if="item.icon" :class="['menu-icon', item.icon]" />
 			<span class="menu-label">{{ item.label }}</span>
+			<span v-if="item.meta" class="menu-meta">{{ item.meta }}</span>
 		</RouterLink>
 
 		<!-- Parent item (toggles sub-menu) -->
@@ -92,6 +95,7 @@ function handleNavClick() {
 		>
 			<i v-if="item.icon" :class="['menu-icon', item.icon]" />
 			<span class="menu-label">{{ item.label }}</span>
+			<span v-if="item.meta" class="menu-meta">{{ item.meta }}</span>
 			<i
 				class="pi pi-chevron-right menu-toggle-icon"
 				:class="{ rotated: open }"
@@ -168,6 +172,15 @@ function handleNavClick() {
 
 .menu-label {
 	flex: 1;
+	min-width: 0;
+}
+
+.menu-meta {
+	margin-left: auto;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--p-surface-500);
+	white-space: nowrap;
 }
 
 .menu-toggle-icon {
