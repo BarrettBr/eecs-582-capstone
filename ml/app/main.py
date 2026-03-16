@@ -13,6 +13,7 @@ Known faults: Small sample sets can reduce cluster count to avoid fit failures
 '''
 
 import argparse
+import errno
 import json
 import os
 import pickle
@@ -828,7 +829,20 @@ def serve(host='127.0.0.1', port=8000, clusters=3, percentile=95):
 		(MLRequestHandler,),
 		{'clusters': clusters, 'percentile': percentile},
 	)
-	server = ThreadingHTTPServer((host, port), handler)
+	ThreadingHTTPServer.allow_reuse_address = True
+	try:
+		server = ThreadingHTTPServer((host, port), handler)
+	except OSError as err:
+		if err.errno == errno.EADDRINUSE:
+			raise RuntimeError(
+				f'ML API could not bind to http://{host}:{port} because the port is already in use. '
+				f'Try stopping the existing process or run `make dev ML_PORT={port + 1}`.'
+			) from err
+		if err.errno == errno.EADDRNOTAVAIL:
+			raise RuntimeError(
+				f'ML API could not bind to http://{host}:{port} because that host address is not available on this machine.'
+			) from err
+		raise
 	print(f'ML API listening on http://{host}:{port}')
 	server.serve_forever()
 
@@ -846,6 +860,8 @@ def main():
 	parser.add_argument('--clusters', type=int, default=3, help='Number of KMeans clusters for temperature.')
 	parser.add_argument('--percentile', type=float, default=95, help='Percentile for temperature outlier threshold.')
 	parser.add_argument('--serve', action='store_true', help='Start HTTP API mode instead of CLI file mode.')
+	parser.add_argument('--host', default=os.environ.get('ML_HOST', '127.0.0.1'), help='Host interface for HTTP API mode.')
+	parser.add_argument('--port', type=int, default=int(os.environ.get('ML_PORT', '8000')), help='Port for HTTP API mode.')
 	parser.add_argument('--warmup-db', help='Path to SQLite database file for extracting historical data for warmup.')
 	parser.add_argument(
 		'--warmup-db-limit',
@@ -908,7 +924,7 @@ def main():
 
 	# Serve used as a "Hey this is in live production" skip over the manual just this testing
 	if args.serve:
-		serve(clusters=args.clusters, percentile=args.percentile)
+		serve(host=args.host, port=args.port, clusters=args.clusters, percentile=args.percentile)
 		return
 
 	if not args.input:

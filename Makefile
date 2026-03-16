@@ -9,7 +9,9 @@ ML_PYTHON ?= $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),$(PYTHON))
 SIM_SOURCE_CONFIG ?= ingest/config/sources.json
 MODBUS_SOURCE_CONFIG ?= ingest/config/sources.json
 MODBUS_SOURCE_PROFILE ?= modbus
-ML_API_URL ?= http://127.0.0.1:8000
+ML_HOST ?= 127.0.0.1
+ML_PORT ?= 8000
+ML_API_URL ?= http://$(ML_HOST):$(ML_PORT)
 ML_BATCH_FLUSH_INTERVAL ?= 300ms
 
 deps: web-deps ml-deps
@@ -25,13 +27,13 @@ ingest:
 	cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run .
 
 ml:
-	$(ML_PYTHON) ml/app/main.py --serve
+	ML_HOST=$(ML_HOST) ML_PORT=$(ML_PORT) $(ML_PYTHON) ml/app/main.py --serve --host $(ML_HOST) --port $(ML_PORT)
 
 web:
 	cd frontend && $(NPM) run dev -- --host
 
 dev:
-	@( $(ML_PYTHON) ml/app/main.py --serve ) & ml_pid=$$!; \
+	@( ML_HOST=$(ML_HOST) ML_PORT=$(ML_PORT) $(ML_PYTHON) ml/app/main.py --serve --host $(ML_HOST) --port $(ML_PORT) ) & ml_pid=$$!; \
 	sleep 2; \
 	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & ingest_pid=$$!; \
 	( cd frontend && $(NPM) run dev -- --host ) & web_pid=$$!; \
@@ -39,7 +41,7 @@ dev:
 	wait
 
 dev-modbus:
-	@( $(ML_PYTHON) ml/app/main.py --serve ) & ml_pid=$$!; \
+	@( ML_HOST=$(ML_HOST) ML_PORT=$(ML_PORT) $(ML_PYTHON) ml/app/main.py --serve --host $(ML_HOST) --port $(ML_PORT) ) & ml_pid=$$!; \
 	sleep 2; \
 	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(MODBUS_SOURCE_CONFIG)) SOURCE_CONFIG_PROFILE=$(MODBUS_SOURCE_PROFILE) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & ingest_pid=$$!; \
 	( cd frontend && $(NPM) run dev -- --host ) & web_pid=$$!; \

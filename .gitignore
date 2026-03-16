@@ -35,6 +35,7 @@ ingest/data/app.db*
 logs/
 tmp/
 temp/
+docs/ideas/
 *.jsonl
 *.csv
 *.db
