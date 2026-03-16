@@ -31,15 +31,17 @@ web:
 	cd frontend && $(NPM) run dev -- --host
 
 dev:
-	@trap 'kill 0' INT TERM EXIT; \
-	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & \
-	( $(ML_PYTHON) ml/app/main.py --serve ) & \
-	( cd frontend && $(NPM) run dev -- --host ) & \
+	@( $(ML_PYTHON) ml/app/main.py --serve ) & ml_pid=$$!; \
+	sleep 2; \
+	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(SIM_SOURCE_CONFIG)) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & ingest_pid=$$!; \
+	( cd frontend && $(NPM) run dev -- --host ) & web_pid=$$!; \
+	trap 'kill $$ml_pid $$ingest_pid $$web_pid 2>/dev/null || true' INT TERM EXIT; \
 	wait
 
 dev-modbus:
-	@trap 'kill 0' INT TERM EXIT; \
-	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(MODBUS_SOURCE_CONFIG)) SOURCE_CONFIG_PROFILE=$(MODBUS_SOURCE_PROFILE) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & \
-	( $(ML_PYTHON) ml/app/main.py --serve ) & \
-	( cd frontend && $(NPM) run dev -- --host ) & \
+	@( $(ML_PYTHON) ml/app/main.py --serve ) & ml_pid=$$!; \
+	sleep 2; \
+	( cd ingest && SOURCE_CONFIG_PATH=$(patsubst ingest/%,%,$(MODBUS_SOURCE_CONFIG)) SOURCE_CONFIG_PROFILE=$(MODBUS_SOURCE_PROFILE) ML_API_URL=$(ML_API_URL) ML_BATCH_FLUSH_INTERVAL=$(ML_BATCH_FLUSH_INTERVAL) $(GO) run . ) & ingest_pid=$$!; \
+	( cd frontend && $(NPM) run dev -- --host ) & web_pid=$$!; \
+	trap 'kill $$ml_pid $$ingest_pid $$web_pid 2>/dev/null || true' INT TERM EXIT; \
 	wait

@@ -93,7 +93,13 @@ async function requestExport() {
                 return;
             }
 
-            const headers = Object.keys(rows[0]);
+            const firstRow = rows[0];
+            if (!firstRow) {
+                alert("No row data available to export");
+                return;
+            }
+
+            const headers = Object.keys(firstRow);
             const csvRows = [
                 headers.join(","),
                 ...rows.map(r => headers.map(h => r[h]).join(","))
