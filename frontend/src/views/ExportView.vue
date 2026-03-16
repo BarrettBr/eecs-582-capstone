@@ -76,50 +76,32 @@ async function requestExport() {
 }
 
         // Plain text export
-        if (selectedFormat.value === "text") {
+       if (selectedFormat.value === "text") {
+			const rows: Record<string, any>[] = data.data;
 
-            const summary = data.summary;
+			if (!rows || rows.length === 0) {
+				alert("No row data available to export");
+				return;
+			}
 
-            fileContent =
-`Report Export
--------------
-Scope: ${scope}
-Time Window: ${selectedTime.value}
-
-Average Temperature: ${summary.avg_temp ?? "N/A"}
-Minimum Temperature: ${summary.min_temp ?? "N/A"}
-Maximum Temperature: ${summary.max_temp ?? "N/A"}
-
-Generated: ${new Date().toLocaleString()}
-`;
-
-            fileType = "text/plain";
-            extension = "txt";
-        }
-
+			fileContent = rows.map(r => JSON.stringify(r)).join("\n");
+			fileType = "text/plain";
+			extension = "txt";
+		}
         // CSV export
         if (selectedFormat.value === "csv") {
 			const rows: Record<string, any>[] = data.data;
 
-			let csvRows: string[] = [];
-			let headers: string[] = [];
-
-			if (rows && rows.length > 0) {
-				headers = Object.keys(rows[0]);
-				csvRows = [
-					headers.join(","),
-					...rows.map(r => headers.map(h => r[h]).join(","))
-				];
-			} else {
-				// Fallback: export summary as a single row
-				const summary = data.summary;
-				headers = Object.keys(summary);
-				const values = Object.values(summary);
-				csvRows = [
-					headers.join(","),
-					values.join(",")
-				];
+			if (!rows || rows.length === 0) {
+				alert("No row data available to export");
+				return;
 			}
+
+			const headers = Object.keys(rows[0]);
+			const csvRows = [
+				headers.join(","),
+				...rows.map(r => headers.map(h => r[h]).join(","))
+			];
 
 			fileContent = csvRows.join("\n");
 			fileType = "text/csv";
