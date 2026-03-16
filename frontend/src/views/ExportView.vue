@@ -31,23 +31,35 @@ function toggleScope(scope: 'temp' | 'valve' | 'ml') {
 
 // --------------------- Export Request ---------------------
 async function requestExport() {
+    const scope = (Object.keys(selectedScope.value) as ScopeType[])
+        .find((k) => selectedScope.value[k]);
 
-	const scope = (Object.keys(selectedScope.value) as ScopeType[])
-	.find((k) => selectedScope.value[k]);
-	
     if (!scope || !selectedTime.value || !selectedFormat.value) {
         alert("Select time, format, and scope");
         return;
     }
 
     try {
+        let url = "";
+        let rows: Record<string, any>[] = [];
+        let summary: Record<string, any> = {};
 
-        const url = `http://localhost:8080/api/v1/report/${scope}/${selectedTime.value}`;
-        const res = await fetch(url);
-
-        if (!res.ok) throw new Error("API request failed");
-
-        const data = await res.json();
+        // Choose API based on format
+        if (selectedFormat.value === "pdf") {
+            // PDF → summary
+            url = `http://localhost:8080/api/v1/report/${scope}/${selectedTime.value}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("API request failed");
+            const data = await res.json();
+            summary = data.summary;
+        } else {
+            // CSV / Text → row-level logs
+            url = `http://localhost:8080/api/v1/history/${scope}/${selectedTime.value}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("API request failed");
+            const data = await res.json();
+            rows = data.items;
+        }
 
         let fileContent: string | Blob = "";
         let fileType = "";
@@ -55,68 +67,62 @@ async function requestExport() {
 
         // PDF export
         if (selectedFormat.value === "pdf") {
-    const summary = data.summary;
+            const doc = new jsPDF();
+            doc.setFontSize(12);
+            doc.text(`Report Export`, 10, 10);
+            doc.text(`Scope: ${scope}`, 10, 20);
+            doc.text(`Time Window: ${selectedTime.value}`, 10, 30);
 
-    const doc = new jsPDF();
-    doc.setFontSize(12);
-    doc.text(`Report Export`, 10, 10);
-    doc.text(`Scope: ${scope}`, 10, 20);
-    doc.text(`Time Window: ${selectedTime.value}`, 10, 30);
-    doc.text(`Average Temperature: ${summary.avg_temp ?? "N/A"}`, 10, 40);
-    doc.text(`Minimum Temperature: ${summary.min_temp ?? "N/A"}`, 10, 50);
-    doc.text(`Maximum Temperature: ${summary.max_temp ?? "N/A"}`, 10, 60);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 10, 70);
+            let y = 40;
+            Object.entries(summary).forEach(([key, val]) => {
+                doc.text(`${key}: ${val}`, 10, y);
+                y += 10;
+            });
 
-    // Output as Blob
-    const pdfBlob = doc.output("blob");
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 10, y);
 
-    fileContent = pdfBlob;
-    fileType = "application/pdf";
-    extension = "pdf";
-}
+            fileContent = doc.output("blob");
+            fileType = "application/pdf";
+            extension = "pdf";
+        }
 
-        // Plain text export
-       if (selectedFormat.value === "text") {
-			const rows: Record<string, any>[] = data.data;
-
-			if (!rows || rows.length === 0) {
-				alert("No row data available to export");
-				return;
-			}
-
-			fileContent = rows.map(r => JSON.stringify(r)).join("\n");
-			fileType = "text/plain";
-			extension = "txt";
-		}
         // CSV export
         if (selectedFormat.value === "csv") {
-			const rows: Record<string, any>[] = data.data;
+            if (!rows || rows.length === 0) {
+                alert("No row data available to export");
+                return;
+            }
 
-			if (!rows || rows.length === 0) {
-				alert("No row data available to export");
-				return;
-			}
+            const headers = Object.keys(rows[0]);
+            const csvRows = [
+                headers.join(","),
+                ...rows.map(r => headers.map(h => r[h]).join(","))
+            ];
 
-			const headers = Object.keys(rows[0]);
-			const csvRows = [
-				headers.join(","),
-				...rows.map(r => headers.map(h => r[h]).join(","))
-			];
+            fileContent = csvRows.join("\n");
+            fileType = "text/csv";
+            extension = "csv";
+        }
 
-			fileContent = csvRows.join("\n");
-			fileType = "text/csv";
-			extension = "csv";
-		}
+        // Plain text export
+        if (selectedFormat.value === "text") {
+            if (!rows || rows.length === 0) {
+                alert("No row data available to export");
+                return;
+            }
 
+            fileContent = rows.map(r => JSON.stringify(r)).join("\n");
+            fileType = "text/plain";
+            extension = "txt";
+        }
+
+        // Trigger download
         const blob = new Blob([fileContent], { type: fileType });
-
         const downloadURL = URL.createObjectURL(blob);
-
         const a = document.createElement("a");
         a.href = downloadURL;
         a.download = `report_${scope}_${selectedTime.value}.${extension}`;
         a.click();
-
         URL.revokeObjectURL(downloadURL);
 
     } catch (err) {
