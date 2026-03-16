@@ -24,30 +24,44 @@ function toggleScope(scope: 'temp' | 'valve' | 'ml') {
 
 // --------------------- Export Request ---------------------
 async function requestExport() {
-    if (!selectedTime.value || !selectedFormat.value) {
-        alert('Please select both a time window and an output format.');
+    if (!selectedTime.value) {
+        alert('Please select a time window.');
         return;
     }
 
-    const scopeParams = Object.keys(selectedScope.value)
-        .filter(k => selectedScope.value[k as keyof typeof selectedScope.value])
-        .join(',');
+    // Pick first selected scope
+    const selectedScopeKind = Object.keys(selectedScope.value).find(
+        (k) => selectedScope.value[k as keyof typeof selectedScope.value]
+    );
+
+    if (!selectedScopeKind) {
+        alert('Please select at least one data scope.');
+        return;
+    }
 
     try {
-        const res = await fetch(
-            `http://127.0.0.1:8080/api/v1/export?time=${selectedTime.value}&format=${selectedFormat.value}&scope=${scopeParams}`
-        );
+        // Build backend URL (adjust BasePath if needed)
+        const basePath = 'api/v1'; // <-- match appCfg.Stream.APIBasePath in Go
+        const url = `http://localhost:8080/${basePath}/report/${selectedScopeKind}/${selectedTime.value}`;
+
+        // Fetch the JSON
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`HTTP error: ${res.status}`);
+        }
+
         const blob = await res.blob();
 
-        const url = URL.createObjectURL(blob);
+        // Trigger download
+        const downloadUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `export_${selectedTime.value}.${selectedFormat.value==='csv'?'csv':selectedFormat.value==='pdf'?'pdf':'txt'}`;
+        a.href = downloadUrl;
+        a.download = `export_${selectedScopeKind}_${selectedTime.value}.json`;
         a.click();
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(downloadUrl);
     } catch (err) {
         console.error('Export failed:', err);
-        alert('Export failed, check console.');
+        alert('Export failed, check console for details.');
     }
 }
 </script>
