@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { ref, onMounted } from 'vue'; // add this
 
-const loading = ref(false);              // add this
-const tempData = ref<any[]>([]);         // add this
-const valveData = ref<any[]>([]);        // add this
-const tempSummary = ref<any>({});        // add this
-const valveSummary = ref<any>({});       // add this
 const props = defineProps<{
   reportData: any;  // your API JSON
 }>();
@@ -100,42 +94,14 @@ const temperaturePoints = [
 	65, 66, 64, 64, 65, 64, 65, 66, 67, 67, 66, 68, 85, 82,
 ];
 const valveBars = [22, 28, 35, 33, 39, 42, 43, 47, 46, 44, 43, 47, 46, 52];
-async function fetchReports() {
-    loading.value = true;
-    try {
-        const tempRes = await fetch('http://127.0.0.1:8080/api/v1/history/temp/hour');
-        tempData.value = await tempRes.json();
+import { ref } from 'vue';
 
-        const valveRes = await fetch('http://127.0.0.1:8080/api/v1/report/valve/week');
-        valveData.value = await valveRes.json();
+const loading = ref(false);
+const tempData = ref<any[]>([]);
+const valveData = ref<any[]>([]);
+const tempSummary = ref<any>({});
+const valveSummary = ref<any>({});
 
-        tempSummary.value = tempData.value.summary || {};
-        valveSummary.value = valveData.value.summary || {};
-    } catch (err) {
-        console.error('Error fetching reports:', err);
-    } finally {
-        loading.value = false;
-    }
-}
-function exportCSV(type: 'temp' | 'valve') {
-    let data = type === 'temp' ? tempData.value.data || [] : valveData.value.data || [];
-    if (!data.length) return;
-
-    const headers = Object.keys(data[0]);
-    const csvRows = [
-        headers.join(','), 
-        ...data.map(row => headers.map(h => row[h]).join(','))
-    ];
-    const csvString = csvRows.join('\n');
-
-    const blob = new Blob([csvString], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${type}_report.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
 function metricToneClass(tone: SummaryMetric["tone"]): string {
 	return `tone-${tone}`;
 }
@@ -165,10 +131,6 @@ function buildTemperaturePath(values: number[]): string {
 }
 
 const temperaturePath = buildTemperaturePath(temperaturePoints);
-onMounted(() => {
-    fetchReports();
-});
-
 </script>
 
 <template>
@@ -349,10 +311,6 @@ onMounted(() => {
 					</div>
 
 					<button type="button" class="cta-button">View All Alerts</button>
-					<div class="export-buttons" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
-    				<button @click="exportCSV('temp')" class="cta-button">Export Temp CSV</button>
-    				<button @click="exportCSV('valve')" class="cta-button">Export Valve CSV</button>
-					</div>
 				</div>
 			</div>
 		</section>
