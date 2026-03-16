@@ -3,11 +3,18 @@ import Card from "primevue/card";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 import { ref } from 'vue';
+import jsPDF from "jspdf";
 
 // --------------------- User Selections ---------------------
 const selectedTime = ref<'hour' | 'day' | 'week' | null>(null);
-const selectedFormat = ref<'pdf' | 'text' | 'csv' | null>(null);
-const selectedScope = ref({ temp: true, valve: false, ml: true });
+const selectedFormat = ref<'pdf' | 'text' | 'csv' | 'json' | null>(null);
+type ScopeType = 'temp' | 'valve' | 'ml';
+
+const selectedScope = ref<Record<ScopeType, boolean>>({
+  temp: false,
+  valve: false,
+  ml: false
+});
 
 // --------------------- Button Handlers ---------------------
 function selectTime(window: 'hour' | 'day' | 'week') {
@@ -24,44 +31,115 @@ function toggleScope(scope: 'temp' | 'valve' | 'ml') {
 
 // --------------------- Export Request ---------------------
 async function requestExport() {
-    if (!selectedTime.value) {
-        alert('Please select a time window.');
-        return;
-    }
 
-    // Pick first selected scope
-    const selectedScopeKind = Object.keys(selectedScope.value).find(
-        (k) => selectedScope.value[k as keyof typeof selectedScope.value]
-    );
-
-    if (!selectedScopeKind) {
-        alert('Please select at least one data scope.');
+	const scope = (Object.keys(selectedScope.value) as ScopeType[])
+	.find((k) => selectedScope.value[k]);
+	
+    if (!scope || !selectedTime.value || !selectedFormat.value) {
+        alert("Select time, format, and scope");
         return;
     }
 
     try {
-        // Build backend URL (adjust BasePath if needed)
-        const basePath = 'api/v1'; // <-- match appCfg.Stream.APIBasePath in Go
-        const url = `http://localhost:8080/${basePath}/report/${selectedScopeKind}/${selectedTime.value}`;
 
-        // Fetch the JSON
+        const url = `http://localhost:8080/api/v1/report/${scope}/${selectedTime.value}`;
         const res = await fetch(url);
-        if (!res.ok) {
-            throw new Error(`HTTP error: ${res.status}`);
+
+        if (!res.ok) throw new Error("API request failed");
+
+        const data = await res.json();
+
+        let fileContent: string | Blob = "";
+        let fileType = "";
+        let extension = "";
+
+        // PDF export
+        if (selectedFormat.value === "pdf") {
+    const summary = data.summary;
+
+    const doc = new jsPDF();
+    doc.setFontSize(12);
+    doc.text(`Report Export`, 10, 10);
+    doc.text(`Scope: ${scope}`, 10, 20);
+    doc.text(`Time Window: ${selectedTime.value}`, 10, 30);
+    doc.text(`Average Temperature: ${summary.avg_temp ?? "N/A"}`, 10, 40);
+    doc.text(`Minimum Temperature: ${summary.min_temp ?? "N/A"}`, 10, 50);
+    doc.text(`Maximum Temperature: ${summary.max_temp ?? "N/A"}`, 10, 60);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 10, 70);
+
+    // Output as Blob
+    const pdfBlob = doc.output("blob");
+
+    fileContent = pdfBlob;
+    fileType = "application/pdf";
+    extension = "pdf";
+}
+
+        // Plain text export
+        if (selectedFormat.value === "text") {
+
+            const summary = data.summary;
+
+            fileContent =
+`Report Export
+-------------
+Scope: ${scope}
+Time Window: ${selectedTime.value}
+
+Average Temperature: ${summary.avg_temp ?? "N/A"}
+Minimum Temperature: ${summary.min_temp ?? "N/A"}
+Maximum Temperature: ${summary.max_temp ?? "N/A"}
+
+Generated: ${new Date().toLocaleString()}
+`;
+
+            fileType = "text/plain";
+            extension = "txt";
         }
 
-        const blob = await res.blob();
+        // CSV export
+        if (selectedFormat.value === "csv") {
+			const rows: Record<string, any>[] = data.data;
 
-        // Trigger download
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `export_${selectedScopeKind}_${selectedTime.value}.json`;
+			let csvRows: string[] = [];
+			let headers: string[] = [];
+
+			if (rows && rows.length > 0) {
+				headers = Object.keys(rows[0]);
+				csvRows = [
+					headers.join(","),
+					...rows.map(r => headers.map(h => r[h]).join(","))
+				];
+			} else {
+				// Fallback: export summary as a single row
+				const summary = data.summary;
+				headers = Object.keys(summary);
+				const values = Object.values(summary);
+				csvRows = [
+					headers.join(","),
+					values.join(",")
+				];
+			}
+
+			fileContent = csvRows.join("\n");
+			fileType = "text/csv";
+			extension = "csv";
+		}
+
+        const blob = new Blob([fileContent], { type: fileType });
+
+        const downloadURL = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = downloadURL;
+        a.download = `report_${scope}_${selectedTime.value}.${extension}`;
         a.click();
-        URL.revokeObjectURL(downloadUrl);
+
+        URL.revokeObjectURL(downloadURL);
+
     } catch (err) {
-        console.error('Export failed:', err);
-        alert('Export failed, check console for details.');
+        console.error("Export failed:", err);
+        alert("Export failed, check console");
     }
 }
 </script>
@@ -115,19 +193,19 @@ async function requestExport() {
                 <div class="stack-list">
                     <Button
 						label="PDF summary report"
-						:severity="selectedFormat==='pdf' ? 'primary' : 'secondary'"
+						:severity="selectedFormat === 'pdf' ? 'primary' : 'secondary'"
 						outlined
 						@click="selectFormat('pdf')"
 					></Button>
 					<Button
 						label="Plain text export"
-						:severity="selectedFormat==='text' ? 'primary' : 'secondary'"
+						:severity="selectedFormat === 'text' ? 'primary' : 'secondary'"
 						outlined
 						@click="selectFormat('text')"
 					></Button>
 					<Button
 						label="CSV / raw data export"
-						:severity="selectedFormat==='csv' ? 'primary' : 'secondary'"
+						:severity="selectedFormat === 'csv' ? 'primary' : 'secondary'"
 						outlined
 						@click="selectFormat('csv')"
 					></Button>
