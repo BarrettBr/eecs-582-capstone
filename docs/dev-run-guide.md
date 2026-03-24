@@ -37,6 +37,15 @@ If you are on Windows with Git Bash and no `make`, use:
 - `./dev-stack.sh modbus`
   - same behavior as `make dev-modbus`
 
+If you are on native Windows PowerShell, use:
+
+- `powershell -ExecutionPolicy Bypass -File .\dev-stack.ps1`
+  - starts the local stack using the PowerShell launcher
+- `powershell -ExecutionPolicy Bypass -File .\dev-stack.ps1 -Modbus`
+  - starts the same stack with the checked-in `modbus` profile
+
+For the full Windows setup flow, see `docs/windows-startup-guide.md`.
+
 ## Simulator Mode
 
 Simulator mode is the default local development path.

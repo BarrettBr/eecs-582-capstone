@@ -15,12 +15,14 @@ If you are trying to understand the ingest backend quickly, start with:
 
 - `docs/ingest-quick-guide.md`
 - `docs/dev-run-guide.md`
+- `docs/windows-startup-guide.md` for native Windows / PowerShell setup
 
 ## Running Locally
 
 Local run instructions for both simulator mode and real Modbus/OpenPLC mode are in:
 
 - `docs/dev-run-guide.md`
+- `docs/windows-startup-guide.md`
 - SQL Check: `cd ingest && sqlite3 data/app.db "select count(*) from temp_samples;"` will show a higher number than before. Delete app.db to reset this from 0 if wanting to clear any previous data
 
 ## Quick Start
