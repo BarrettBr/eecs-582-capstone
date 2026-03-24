@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 TEMPERATURE_HISTORY_LIMIT = 512
@@ -571,12 +572,14 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
 			return df
 
 	scaled_features = model_state['scaler'].transform(features)
+	cluster_labels = model_state['kmeans'].predict(scaled_features)
 	distances = model_state['kmeans'].transform(scaled_features).min(axis=1)
 
 	threshold = float(model_state.get('threshold', np.percentile(distances, outlier_percentile)))
 
 	# Mark as outlier if distance is at or above threshold
 	df = df.copy()
+	df['cluster_label'] = cluster_labels
 	df['detected_anomaly'] = (distances > threshold).astype(int)
 	df['anomaly_score'] = distances
 	df['anomaly_label'] = np.where(df['detected_anomaly'] == 1, 'kmeans_outlier', '')
@@ -653,6 +656,7 @@ def build_anomaly_response(result_df, event_type, model):
 			'index': int(index),
 			'id': int(row['id']) if 'id' in row and pd.notna(row['id']) else None,
 			'timestamp': row.get('timestamp'),
+			'cluster_label': int(row['cluster_label']) if 'cluster_label' in row and pd.notna(row['cluster_label']) else None,
 			'is_anomaly': is_anomaly,
 			'label': label,
 			'score': score,
@@ -693,15 +697,16 @@ def update_recent_history(event_type, df):
 	RECENT_HISTORY[event_type] = combined.tail(history_limit).reset_index(drop=True)
 
 
-def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
+def analyze_temperature_batch(df, n_clusters=3, outlier_percentile=95):
 	'''
-	Runs the end to end temperature analysis path.
+	Run temperature anomaly detection and return both the detailed frame and
+	the stable API response.
 	Args:
 		df: DataFrame of temperature samples.
 		n_clusters: Number of clusters for KMeans.
 		outlier_percentile: Outlier percentile threshold.
 	Returns:
-		Stable anomaly response dictionary.
+		Tuple of (result_df, response_dict, model_state).
 	'''
 	required = {'fan_on', 'temperature', 'heater_power'}
 	missing = sorted(required.difference(df.columns))
@@ -721,7 +726,108 @@ def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
 	)
 	update_recent_history('temperature', df)
 	refresh_temperature_baseline_model(n_clusters=n_clusters, outlier_percentile=outlier_percentile)
-	return build_anomaly_response(result, 'temperature', 'kmeans')
+	response = build_anomaly_response(result, 'temperature', 'kmeans')
+	return result, response, model_state
+
+
+def save_temperature_visualization(result_df, output_path, title=None):
+	'''
+	Save a 2D PCA projection of the analyzed temperature batch.
+	Args:
+		result_df: DataFrame returned by kmeans_anomaly_detection.
+		output_path: File path to write the plot image to.
+		title: Optional chart title.
+	Returns:
+		Absolute path to the saved image.
+	'''
+	if result_df.empty:
+		raise ValueError('cannot visualize an empty temperature batch')
+
+	features = prepare_temperature_features(result_df)
+	if len(features) < 2:
+		raise ValueError('at least two temperature samples are required to visualize clusters')
+
+	try:
+		import matplotlib
+		matplotlib.use('Agg')
+		import matplotlib.pyplot as plt
+	except ImportError as err:
+		raise RuntimeError('matplotlib is required to generate visualization output') from err
+
+	reduced = PCA(n_components=2).fit_transform(features)
+	plot_df = result_df.copy()
+	plot_df['pca_x'] = reduced[:, 0]
+	plot_df['pca_y'] = reduced[:, 1]
+
+	cluster_labels = sorted(plot_df['cluster_label'].dropna().astype(int).unique()) if 'cluster_label' in plot_df else []
+	plt.figure(figsize=(8, 5))
+
+	if cluster_labels:
+		for cluster_label in cluster_labels:
+			cluster_points = plot_df[plot_df['cluster_label'] == cluster_label]
+			normal_points = cluster_points[cluster_points['detected_anomaly'] == 0]
+			if not normal_points.empty:
+				plt.scatter(
+					normal_points['pca_x'],
+					normal_points['pca_y'],
+					label=f'Cluster {cluster_label}',
+					s=65,
+					alpha=0.8,
+				)
+	else:
+		normal_points = plot_df[plot_df['detected_anomaly'] == 0]
+		if not normal_points.empty:
+			plt.scatter(
+				normal_points['pca_x'],
+				normal_points['pca_y'],
+				label='Normal samples',
+				s=65,
+				alpha=0.8,
+				color='tab:blue',
+			)
+
+	anomaly_points = plot_df[plot_df['detected_anomaly'] == 1]
+	if not anomaly_points.empty:
+		plt.scatter(
+			anomaly_points['pca_x'],
+			anomaly_points['pca_y'],
+			label='Anomalies',
+			s=150,
+			marker='x',
+			linewidths=2.0,
+			color='red',
+		)
+
+	plt.title(title or 'Temperature Clusters and Anomalies')
+	plt.xlabel('PCA 1')
+	plt.ylabel('PCA 2')
+	plt.legend()
+	plt.tight_layout()
+
+	output_dir = os.path.dirname(os.path.abspath(output_path))
+	if output_dir:
+		os.makedirs(output_dir, exist_ok=True)
+	plt.savefig(output_path, dpi=150)
+	plt.close()
+	return os.path.abspath(output_path)
+
+
+def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
+	'''
+	Runs the end to end temperature analysis path.
+	Args:
+		df: DataFrame of temperature samples.
+		n_clusters: Number of clusters for KMeans.
+		outlier_percentile: Outlier percentile threshold.
+	Returns:
+		Stable anomaly response dictionary.
+	'''
+	_, response, _ = analyze_temperature_batch(
+		df,
+		n_clusters=n_clusters,
+		outlier_percentile=outlier_percentile,
+	)
+	return response
 
 
 def analyze_valve(df):
@@ -875,6 +981,8 @@ def main():
 	parser.add_argument('--max-warmup-samples', type=int, help='Maximum samples to process during warmup (optional).')
 	parser.add_argument('--load-checkpoint', help='Load specific checkpoint file.')
 	parser.add_argument('--status', action='store_true', help='Show current training status and exit.')
+	parser.add_argument('--plot-output', help='Optional image path for a temperature cluster/anomaly visualization.')
+	parser.add_argument('--plot-title', help='Optional title for the saved temperature visualization.')
 	args = parser.parse_args()
 
 	# Always try to load the latest checkpoint on startup (unless specifically loading a different one)
@@ -933,8 +1041,22 @@ def main():
 	# CLI mode keeps working for local batch testing
 	event_type, df = load_samples_from_json(args.input)
 	if event_type == 'temperature':
-		result = analyze_temperature(df, n_clusters=args.clusters, outlier_percentile=args.percentile)
+		result_df, result, _ = analyze_temperature_batch(
+			df,
+			n_clusters=args.clusters,
+			outlier_percentile=args.percentile,
+		)
+		if args.plot_output:
+			result['visualization'] = {
+				'path': save_temperature_visualization(
+					result_df,
+					args.plot_output,
+					title=args.plot_title,
+				)
+			}
 	elif event_type == 'valve':
+		if args.plot_output:
+			raise ValueError('visualization output is only supported for temperature batches')
 		result = analyze_valve(df)
 	else:
 		raise ValueError(f'unsupported event_type: {event_type}')
