@@ -11,7 +11,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
-const props = defineProps<{
+defineProps<{
 	title: string;
 	subtitle: string;
 }>();
@@ -20,8 +20,8 @@ const props = defineProps<{
 <template>
 	<div class="dashboard-header">
 		<div>
-			<h1 class="dashboard-title">{{ props.title }}</h1>
-			<p class="dashboard-subtitle">{{ props.subtitle }}</p>
+			<h1 class="dashboard-title">{{ title }}</h1>
+			<p class="dashboard-subtitle">{{ subtitle }}</p>
 		</div>
 	</div>
 </template>

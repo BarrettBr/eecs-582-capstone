@@ -102,7 +102,7 @@ const recentEventRows = computed<EventRow[]>(() => {
 </script>
 
 <template>
-	<Card class="card col-span-2">
+	<Card>
 		<template #title>
 			<div class="switch-header">
 				<span>Event Stream</span>

@@ -51,9 +51,11 @@ type HTTPRegistrar interface {
 
 // Config holds API registration settings.
 type Config struct {
-	BasePath string
-	Queries  *database.Queries
-	Status   StatusProvider
+	BasePath         string
+	Queries          *database.Queries
+	Status           StatusProvider
+	SourceConfigPath string
+	SourceProfile    string
 }
 
 // Registration contains important registered endpoint paths for logging.
@@ -63,12 +65,15 @@ type Registration struct {
 	ReportPath           string
 	IngestionStatusPath  string
 	IngestionMetricsPath string
+	AdminConfigPath      string
 }
 
 type apiConfig struct {
-	basePath string
-	queries  *database.Queries
-	status   StatusProvider
+	basePath         string
+	queries          *database.Queries
+	status           StatusProvider
+	sourceConfigPath string
+	sourceProfile    string
 }
 
 type StatusProvider interface {
@@ -80,9 +85,11 @@ type StatusProvider interface {
 // output: Returns the final registered route paths for logging and startup output.
 func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 	apiCfg := &apiConfig{
-		basePath: cfg.BasePath,
-		queries:  cfg.Queries,
-		status:   cfg.Status,
+		basePath:         cfg.BasePath,
+		queries:          cfg.Queries,
+		status:           cfg.Status,
+		sourceConfigPath: cfg.SourceConfigPath,
+		sourceProfile:    cfg.SourceProfile,
 	}
 
 	pingPath := path.Join(apiCfg.basePath, "ping")
@@ -90,12 +97,16 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 	reportPath := path.Join(apiCfg.basePath, "report", "{kind}", "{window}")
 	ingestionStatusPath := path.Join(apiCfg.basePath, "ingestion", "status")
 	ingestionMetricsPath := path.Join(apiCfg.basePath, "ingestion", "metrics")
+	adminConfigPath := path.Join(apiCfg.basePath, "admin", "config")
 	routes := map[string]http.HandlerFunc{
 		"GET " + pingPath:             apiCfg.pingHandler,
 		"GET " + historyPath:          apiCfg.historyHandler,
 		"GET " + reportPath:           apiCfg.reportHandler,
 		"GET " + ingestionStatusPath:  apiCfg.ingestionStatusHandler,
 		"GET " + ingestionMetricsPath: apiCfg.ingestionMetricsHandler,
+		"GET " + adminConfigPath:      apiCfg.adminConfigHandler,
+		"PUT " + adminConfigPath:      apiCfg.adminConfigHandler,
+		"OPTIONS " + adminConfigPath:  apiCfg.optionsHandler,
 	}
 
 	for pattern, handler := range routes {
@@ -109,6 +120,7 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		ReportPath:           reportPath,
 		IngestionStatusPath:  ingestionStatusPath,
 		IngestionMetricsPath: ingestionMetricsPath,
+		AdminConfigPath:      adminConfigPath,
 	}
 }
 
@@ -117,6 +129,10 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 // output: Writes a small JSON pong payload.
 func (cfg *apiConfig) pingHandler(w http.ResponseWriter, _ *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "pong"})
+}
+
+func (cfg *apiConfig) optionsHandler(w http.ResponseWriter, _ *http.Request) {
+	respondWithJSON(w, http.StatusNoContent, nil)
 }
 
 // description: Writes a JSON error response and logs server side errors when present.
@@ -143,14 +159,14 @@ func respondWithError(w http.ResponseWriter, status_code int, msg string, err er
 // output: Sends a JSON response body or a 500 error on marshal failure.
 func respondWithJSON(w http.ResponseWriter, status_code int, payload any) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/json")
-	dat, err := json.Marshal(payload)
 	if payload == nil {
+		w.WriteHeader(status_code)
 		return
 	}
-
+	dat, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)

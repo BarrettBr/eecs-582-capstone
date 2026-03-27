@@ -158,29 +158,49 @@ func LoadSourceCatalogWithProfile(path string, profileName string) (*SourceCatal
 		return nil, fmt.Errorf("read source config %s: %w", path, err)
 	}
 
+	return ParseSourceCatalogWithProfile(content, profileName)
+}
+
+// description: Parses, defaults, validates, and optionally applies one named profile from in-memory JSON.
+// input: raw source catalog JSON bytes plus an optional profile name.
+// output: Returns a fully validated SourceCatalog or an error.
+func ParseSourceCatalogWithProfile(content []byte, profileName string) (*SourceCatalog, error) {
 	var catalog SourceCatalog
 	if err := json.Unmarshal(content, &catalog); err != nil {
-		return nil, fmt.Errorf("parse source config %s: %w", path, err)
+		return nil, fmt.Errorf("parse source config: %w", err)
 	}
-	applyCatalogDefaults(&catalog)
+	if err := ValidateSourceCatalogWithProfile(&catalog, profileName); err != nil {
+		return nil, err
+	}
+	return &catalog, nil
+}
+
+// description: Applies defaults and validates one parsed source catalog in place.
+// input: parsed SourceCatalog plus an optional profile name.
+// output: Returns nil when the catalog is ready for use.
+func ValidateSourceCatalogWithProfile(catalog *SourceCatalog, profileName string) error {
+	if catalog == nil {
+		return fmt.Errorf("source catalog is required")
+	}
+	applyCatalogDefaults(catalog)
 	if len(catalog.Sources) == 0 {
-		return nil, fmt.Errorf("source config %s defines no sources", path)
+		return fmt.Errorf("source config defines no sources")
 	}
 	if err := validateBufferingConfig(catalog.Runtime.Buffering); err != nil {
-		return nil, err
+		return err
 	}
 
 	seen := make(map[string]struct{}, len(catalog.Sources))
 	for i := range catalog.Sources {
 		if err := validateSourceDefinition(&catalog.Sources[i], seen); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	if err := applyCatalogProfile(&catalog, profileName, seen); err != nil {
-		return nil, err
+	if err := applyCatalogProfile(catalog, profileName, seen); err != nil {
+		return err
 	}
 
-	return &catalog, nil
+	return nil
 }
 
 // description: Fills in default buffering and per source flow control values.

@@ -66,7 +66,7 @@ function selectChart(value: string): void {
 </script>
 
 <template>
-	<Card class="card col-span-2">
+	<Card class="chart-card">
 		<template #title>
 			<div class="chart-header">
 				<div class="chart-header-copy">
@@ -99,26 +99,26 @@ function selectChart(value: string): void {
 				dismissableMask
 				header="Choose Chart"
 				:style="{ width: '28rem', maxWidth: '92vw' }"
-				>
-					<div class="switcher-dialog">
-						<p class="switcher-copy">
-							Select which live service stream you want graphed.
-						</p>
-						<label class="switcher-search">
-							<span class="switcher-search-label">Search Charts</span>
-							<input
-								v-model="searchQuery"
-								type="search"
-								class="switcher-search-input"
-								placeholder="Search by chart name"
-							/>
-						</label>
-						<div class="switcher-options">
-							<button
-								v-for="option in filteredSelections"
-								:key="option.value"
-								type="button"
-								class="switcher-option"
+			>
+				<div class="switcher-dialog">
+					<p class="switcher-copy">
+						Select which live service stream you want graphed.
+					</p>
+					<label class="switcher-search">
+						<span class="switcher-search-label">Search Charts</span>
+						<input
+							v-model="searchQuery"
+							type="search"
+							class="switcher-search-input"
+							placeholder="Search by chart name"
+						/>
+					</label>
+					<div class="switcher-options">
+						<button
+							v-for="option in filteredSelections"
+							:key="option.value"
+							type="button"
+							class="switcher-option"
 							:class="{
 								'switcher-option--active': option.value === props.selection,
 							}"
@@ -130,22 +130,26 @@ function selectChart(value: string): void {
 								class="switcher-option-state"
 							>
 								Selected
-								</span>
-							</button>
-							<div
-								v-if="filteredSelections.length === 0"
-								class="switcher-empty"
-							>
-								No charts match that search.
-							</div>
+							</span>
+						</button>
+						<div
+							v-if="filteredSelections.length === 0"
+							class="switcher-empty"
+						>
+							No charts match that search.
 						</div>
 					</div>
-				</Dialog>
+				</div>
+			</Dialog>
 		</template>
 	</Card>
 </template>
 
 <style scoped>
+.chart-card {
+	padding: 1rem;
+}
+
 .chart-header {
 	display: flex;
 	justify-content: space-between;
@@ -262,18 +266,4 @@ function selectChart(value: string): void {
 	text-align: center;
 }
 
-.card {
-	padding: 1rem;
-	grid-column: span 12;
-}
-
-@media (min-width: 768px) {
-	.card {
-		grid-column: span 4;
-	}
-
-	.col-span-2 {
-		grid-column: span 8 !important;
-	}
-}
 </style>

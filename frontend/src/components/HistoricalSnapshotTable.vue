@@ -240,7 +240,6 @@ onMounted(() => {
 <style scoped>
 .snapshot-card {
 	padding: 1rem;
-	grid-column: span 12;
 }
 
 .snapshot-header {
@@ -265,12 +264,6 @@ onMounted(() => {
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 0.75rem;
-}
-
-@media (min-width: 768px) {
-	.snapshot-card {
-		grid-column: span 12;
-	}
 }
 
 @media (max-width: 767px) {

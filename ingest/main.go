@@ -130,9 +130,11 @@ func main() {
 		log.Printf("Fault injection triggered for source=%q", req.SourceName)
 	})
 	apiRegistration := api.RegisterRoutes(wsServer, api.Config{
-		BasePath: appCfg.Stream.APIBasePath,
-		Queries:  appCfg.Queries,
-		Status:   registrar,
+		BasePath:         appCfg.Stream.APIBasePath,
+		Queries:          appCfg.Queries,
+		Status:           registrar,
+		SourceConfigPath: appCfg.Ingest.SourceConfigPath,
+		SourceProfile:    appCfg.Ingest.SourceProfile,
 	})
 
 	go func() {

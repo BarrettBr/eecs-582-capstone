@@ -44,6 +44,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
@@ -89,15 +90,24 @@ func NewRuleEngine(specPath string) (*RuleEngine, error) {
 		return nil, fmt.Errorf("Read validation spec %s: %w", specPath, err)
 	}
 
-	var spec ValidationSpec
-	if err := json.Unmarshal(content, &spec); err != nil {
+	spec, err := ParseValidationSpec(content)
+	if err != nil {
 		return nil, fmt.Errorf("Parse validation spec %s: %w", specPath, err)
-	}
-	if spec.Bounds == nil {
-		spec.Bounds = make(map[string]Bounds)
 	}
 
 	return &RuleEngine{Spec: spec}, nil
+}
+
+// ParseValidationSpec reads, normalizes, and validates one validation spec from in-memory JSON.
+func ParseValidationSpec(content []byte) (ValidationSpec, error) {
+	var spec ValidationSpec
+	if err := json.Unmarshal(content, &spec); err != nil {
+		return ValidationSpec{}, err
+	}
+	if err := NormalizeValidationSpec(&spec); err != nil {
+		return ValidationSpec{}, err
+	}
+	return spec, nil
 }
 
 // Validate checks one event against required fields, bounds, and anomaly rules.
@@ -226,4 +236,60 @@ func getFloatNumber(sample ingestevents.RecordEvent, field string) (float64, boo
 	}
 
 	return num, true, ""
+}
+
+// NormalizeValidationSpec trims, de-duplicates, and validates one spec in place.
+func NormalizeValidationSpec(spec *ValidationSpec) error {
+	if spec == nil {
+		return fmt.Errorf("validation spec is required")
+	}
+	if spec.Bounds == nil {
+		spec.Bounds = make(map[string]Bounds)
+	}
+
+	requiredSeen := make(map[string]struct{}, len(spec.RequiredFields))
+	normalizedRequired := make([]string, 0, len(spec.RequiredFields))
+	for _, field := range spec.RequiredFields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			return fmt.Errorf("required_fields cannot contain empty values")
+		}
+		if _, seen := requiredSeen[field]; seen {
+			continue
+		}
+		requiredSeen[field] = struct{}{}
+		normalizedRequired = append(normalizedRequired, field)
+	}
+	slices.Sort(normalizedRequired)
+	spec.RequiredFields = normalizedRequired
+
+	normalizedBounds := make(map[string]Bounds, len(spec.Bounds))
+	for field, bound := range spec.Bounds {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			return fmt.Errorf("bounds cannot contain an empty field name")
+		}
+		if bound.Min != nil && bound.Max != nil && *bound.Min > *bound.Max {
+			return fmt.Errorf("bounds for %q have min greater than max", field)
+		}
+		normalizedBounds[field] = bound
+	}
+	spec.Bounds = normalizedBounds
+
+	for i := range spec.AnomalyRules {
+		spec.AnomalyRules[i].Field = strings.TrimSpace(spec.AnomalyRules[i].Field)
+		spec.AnomalyRules[i].Op = strings.TrimSpace(spec.AnomalyRules[i].Op)
+		spec.AnomalyRules[i].Label = strings.TrimSpace(spec.AnomalyRules[i].Label)
+		if spec.AnomalyRules[i].Field == "" {
+			return fmt.Errorf("anomaly_rules[%d].field is required", i)
+		}
+		if spec.AnomalyRules[i].Label == "" {
+			return fmt.Errorf("anomaly_rules[%d].label is required", i)
+		}
+		if _, err := compareFloat(0, spec.AnomalyRules[i].Op, 0); err != nil {
+			return fmt.Errorf("anomaly_rules[%d].op %q is unsupported", i, spec.AnomalyRules[i].Op)
+		}
+	}
+
+	return nil
 }

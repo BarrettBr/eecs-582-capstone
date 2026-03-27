@@ -31,7 +31,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<Card class="card">
+	<Card class="metrics-card">
 		<template #title>Metrics</template>
 		<template #content>
 			<div class="metrics-grid">
@@ -75,9 +75,8 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.card {
+.metrics-card {
 	padding: 1rem;
-	grid-column: span 12;
 }
 
 .metrics-grid {
@@ -115,9 +114,4 @@ const emit = defineEmits<{
 	align-items: center;
 }
 
-@media (min-width: 768px) {
-	.card {
-		grid-column: span 4;
-	}
-}
 </style>

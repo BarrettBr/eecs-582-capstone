@@ -54,7 +54,7 @@ const hiddenServiceCount = computed(() =>
 </script>
 
 <template>
-	<Card class="card">
+	<Card class="status-card">
 		<template #title>
 			<div class="card-title-row">
 				<span>System Status</span>
@@ -132,9 +132,8 @@ const hiddenServiceCount = computed(() =>
 </template>
 
 <style scoped>
-.card {
+.status-card {
 	padding: 1rem;
-	grid-column: span 12;
 }
 
 .card-title-row {
@@ -203,9 +202,4 @@ const hiddenServiceCount = computed(() =>
 	color: var(--p-surface-800);
 }
 
-@media (min-width: 768px) {
-	.card {
-		grid-column: span 4;
-	}
-}
 </style>
