@@ -27,6 +27,19 @@ func TestLoadSourceCatalogAppliesDefaults(t *testing.T) {
       }
     },
     {
+      "name": "valve_dev",
+      "event_type": "valve",
+      "mode": "simulator",
+      "enabled": true,
+      "validation_file": "config/validation/valve.json",
+      "ml_enabled": true,
+      "simulator": {
+        "interval": "100ms",
+        "seed": 84,
+        "profile": "valve_default"
+      }
+    },
+    {
       "name": "temp_plc",
       "event_type": "temperature",
       "mode": "modbus",
@@ -53,7 +66,10 @@ func TestLoadSourceCatalogAppliesDefaults(t *testing.T) {
 	if got := catalog.Sources[0].SQLTarget; got != "temp_samples" {
 		t.Fatalf("temperature SQLTarget = %q, want %q", got, "temp_samples")
 	}
-	if got := catalog.Sources[1].Modbus.SlaveID; got != 1 {
+	if got := catalog.Sources[1].SQLTarget; got != "valve_samples" {
+		t.Fatalf("valve SQLTarget = %q, want %q", got, "valve_samples")
+	}
+	if got := catalog.Sources[2].Modbus.SlaveID; got != 1 {
 		t.Fatalf("modbus SlaveID = %d, want 1", got)
 	}
 	if got := catalog.Runtime.Buffering.SharedUnits; got != defaultSharedUnits {
@@ -62,7 +78,7 @@ func TestLoadSourceCatalogAppliesDefaults(t *testing.T) {
 	if got := catalog.Sources[0].FlowControl.ReservedUnits; got != defaultReservedUnits {
 		t.Fatalf("source reserved units = %d, want %d", got, defaultReservedUnits)
 	}
-	if got := catalog.Sources[1].FlowControl.SupportsBackpressureValue(catalog.Sources[1].Mode); !got {
+	if got := catalog.Sources[2].FlowControl.SupportsBackpressureValue(catalog.Sources[2].Mode); !got {
 		t.Fatalf("modbus source supports backpressure = false, want true")
 	}
 }
@@ -180,7 +196,7 @@ func TestLoadSourceCatalogWithProfileOverridesEnabledSources(t *testing.T) {
 	content := `{
   "profiles": {
     "modbus": {
-      "enabled_sources": ["temp_plc"]
+      "enabled_sources": ["temp_plc", "valve_plc"]
     }
   },
   "sources": [
@@ -197,6 +213,18 @@ func TestLoadSourceCatalogWithProfileOverridesEnabledSources(t *testing.T) {
       }
     },
     {
+      "name": "valve_dev",
+      "event_type": "valve",
+      "mode": "simulator",
+      "enabled": true,
+      "validation_file": "config/validation/valve.json",
+      "simulator": {
+        "interval": "100ms",
+        "seed": 84,
+        "profile": "valve_default"
+      }
+    },
+    {
       "name": "temp_plc",
       "event_type": "temperature",
       "mode": "modbus",
@@ -206,6 +234,18 @@ func TestLoadSourceCatalogWithProfileOverridesEnabledSources(t *testing.T) {
         "address": "127.0.0.1:1502",
         "mw_base": 1024,
         "register_count": 6
+      }
+    },
+    {
+      "name": "valve_plc",
+      "event_type": "valve",
+      "mode": "modbus",
+      "enabled": false,
+      "validation_file": "config/validation/valve.json",
+      "modbus": {
+        "address": "127.0.0.1:1502",
+        "mw_base": 1100,
+        "register_count": 5
       }
     }
   ]
@@ -223,8 +263,14 @@ func TestLoadSourceCatalogWithProfileOverridesEnabledSources(t *testing.T) {
 	if catalog.Sources[0].Enabled {
 		t.Fatalf("temp_dev enabled = true, want false under modbus profile")
 	}
-	if !catalog.Sources[1].Enabled {
+	if catalog.Sources[1].Enabled {
+		t.Fatalf("valve_dev enabled = true, want false under modbus profile")
+	}
+	if !catalog.Sources[2].Enabled {
 		t.Fatalf("temp_plc enabled = false, want true under modbus profile")
+	}
+	if !catalog.Sources[3].Enabled {
+		t.Fatalf("valve_plc enabled = false, want true under modbus profile")
 	}
 }
 

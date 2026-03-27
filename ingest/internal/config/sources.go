@@ -82,6 +82,7 @@ type PressureThresholds struct {
 // SourceDefinition describes one ingest source loaded at startup.
 type SourceDefinition struct {
 	Name           string                   `json:"name"`
+	AliasName      string                   `json:"alias_name,omitempty"`
 	EventType      string                   `json:"event_type"`
 	Mode           string                   `json:"mode"`
 	Enabled        bool                     `json:"enabled"`

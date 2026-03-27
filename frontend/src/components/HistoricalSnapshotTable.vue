@@ -46,6 +46,7 @@ interface HistoricalEventRow {
 const props = defineProps<{
 	getEventHistorySnapshot: () => EventSnapshotRow[];
 	getMLAlertHistorySnapshot: () => MLAlert[];
+	serviceDisplayNames: Record<string, string>;
 }>();
 
 const selectedView = ref("events");
@@ -63,6 +64,13 @@ const currentRows = computed(() => {
 		? snapshotEvents.value
 		: snapshotAlerts.value;
 });
+
+function displayServiceName(serviceName?: string): string {
+	if (!serviceName) {
+		return "-";
+	}
+	return props.serviceDisplayNames[serviceName] ?? serviceName;
+}
 
 function normalizeHistoricalEventRows(
 	events: EventSnapshotRow[],
@@ -155,7 +163,11 @@ onMounted(() => {
 					</template>
 				</Column>
 
-				<Column field="service_name" header="Service" sortable />
+				<Column field="service_name" header="Service" sortable>
+					<template #body="{ data }">
+						{{ displayServiceName(data.service_name) }}
+					</template>
+				</Column>
 
 				<Column field="source_label" header="Source" />
 
@@ -198,7 +210,11 @@ onMounted(() => {
 					</template>
 				</Column>
 
-				<Column field="service_name" header="Service" sortable />
+				<Column field="service_name" header="Service" sortable>
+					<template #body="{ data }">
+						{{ displayServiceName(data.service_name) }}
+					</template>
+				</Column>
 
 				<Column header="Anomaly">
 					<template #body="{ data }">

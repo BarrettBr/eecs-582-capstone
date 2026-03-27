@@ -11,6 +11,7 @@ Invariants: Dependencies described in /Docs/web.md
 Known Faults: None
 -->
 <script setup lang="ts">
+import { computed } from "vue";
 import Card from "primevue/card";
 import Tag from "primevue/tag";
 import Button from "primevue/button";
@@ -21,6 +22,7 @@ const props = defineProps<{
 	status: SystemStatus;
 	streamState: string;
 	activeServiceSummary: string;
+	activeServiceNames: string[];
 }>();
 
 const emit = defineEmits<{
@@ -43,6 +45,12 @@ function getSocketSeverity(state: string) {
 			return "info";
 	}
 }
+
+const previewServiceNames = computed(() => props.activeServiceNames.slice(0, 3));
+
+const hiddenServiceCount = computed(() =>
+	Math.max(0, props.activeServiceNames.length - previewServiceNames.value.length),
+);
 </script>
 
 <template>
@@ -100,6 +108,24 @@ function getSocketSeverity(state: string) {
 			<div class="service-summary">
 				<div class="service-summary-label">Active Services</div>
 				<div class="service-summary-value">{{ props.activeServiceSummary }}</div>
+				<div
+					v-if="previewServiceNames.length > 0"
+					class="service-summary-list"
+				>
+					<span
+						v-for="serviceName in previewServiceNames"
+						:key="serviceName"
+						class="service-chip"
+					>
+						{{ serviceName }}
+					</span>
+					<span
+						v-if="hiddenServiceCount > 0"
+						class="service-chip service-chip--more"
+					>
+						+{{ hiddenServiceCount }} more
+					</span>
+				</div>
 			</div>
 		</template>
 	</Card>
@@ -150,6 +176,31 @@ function getSocketSeverity(state: string) {
 .service-summary-value {
 	margin-top: 0.35rem;
 	line-height: 1.5;
+	font-weight: 600;
+}
+
+.service-summary-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.service-chip {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2rem;
+	padding: 0.3rem 0.7rem;
+	border-radius: 999px;
+	background: var(--p-surface-100);
+	color: var(--p-surface-700);
+	font-size: 0.85rem;
+	line-height: 1.2;
+}
+
+.service-chip--more {
+	background: var(--p-surface-200);
+	color: var(--p-surface-800);
 }
 
 @media (min-width: 768px) {

@@ -14,6 +14,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import { useSystemStore } from "@/stores/system";
+import { buildLiveChartOption } from "@/stores/systemChart";
 import EventSwitcherTable from "@/components/EventSwitcherTable.vue";
 import HistoricalSnapshotTable from "@/components/HistoricalSnapshotTable.vue";
 import DashboardHeader from "@/components/DashboardHeader.vue";
@@ -39,14 +40,14 @@ const {
 	faultStatus,
 	status,
 	metrics,
-	temperatureChartBounds,
 } = storeToRefs(store);
 
 const {
-	injectSimulatorFault,
+	injectFault,
 	setFocusedService,
 	updateDashboardSubscriptions,
 } = store;
+const selectedChartKey = ref<string | null>(null);
 
 onMounted(() => {
 	store.startStream();
@@ -67,18 +68,37 @@ const currentService = computed(() => {
 	);
 });
 
+function displayServiceName(serviceName: string | null | undefined): string {
+	if (!serviceName) {
+		return "";
+	}
+	const service = availableServices.value.find(
+		(entry) => entry.name === serviceName,
+	);
+	return service?.alias_name?.trim() || service?.name || serviceName;
+}
+
 const serviceOptions = computed(() =>
 	availableServices.value.map((service) => ({
-		label: `${service.name} (${service.event_type})`,
+		label: `${displayServiceName(service.name)} (${service.event_type})`,
 		value: service.name,
 	})),
+);
+
+const serviceDisplayNames = computed<Record<string, string>>(() =>
+	Object.fromEntries(
+		availableServices.value.map((service) => [
+			service.name,
+			displayServiceName(service.name),
+		]),
+	),
 );
 
 const dashboardTitle = computed(() => {
 	if (!currentService.value) {
 		return "Dashboard";
 	}
-	return `${currentService.value.name} Dashboard`;
+	return `${displayServiceName(currentService.value.name)} Dashboard`;
 });
 
 const dashboardSubtitle = computed(() => {
@@ -89,30 +109,88 @@ const dashboardSubtitle = computed(() => {
 });
 
 const activeServiceSummary = computed(() => {
-	if (currentSubscriptions.value.length === 0) {
+	const count = currentSubscriptions.value.length;
+	if (count === 0) {
 		return "No subscribed services";
 	}
-	return currentSubscriptions.value.join(", ");
+	if (count === 1) {
+		return "1 service subscribed";
+	}
+	return `${count} services subscribed`;
 });
 
-const canInjectFault = computed(() => {
-	if (currentServiceName.value) {
-		return currentServiceName.value === "temp_dev";
-	}
-	return currentSubscriptions.value.includes("temp_dev");
+const activeDashboardServiceEntries = computed(() => {
+	const scopedNames = new Set(
+		currentServiceName.value
+			? [currentServiceName.value]
+			: currentSubscriptions.value,
+	);
+	return availableServices.value.filter((service) => scopedNames.has(service.name));
+});
+
+const chartSwitcherOptions = computed(() =>
+	activeDashboardServiceEntries.value.map((service) => {
+		const option = buildLiveChartOption(service);
+		return {
+			label: option.label,
+			value: option.key,
+			title: option.title,
+			serviceName: option.serviceName,
+		};
+	}),
+);
+
+const activeChartOption = computed(() => {
+	return (
+		chartSwitcherOptions.value.find(
+			(option) => option.value === selectedChartKey.value,
+		) ?? chartSwitcherOptions.value[0] ?? null
+	);
 });
 
 const chartTitle = computed(() => {
-	if (currentService.value?.event_type === "valve") {
-		return "Live Flow (temperature chart unavailable for valve view)";
-	}
-	return "Live Temperature";
+	return activeChartOption.value?.title ?? "Live Metric";
 });
+
+const selectedFaultSourceName = computed(() => {
+	if (currentServiceName.value) {
+		return currentServiceName.value;
+	}
+	return activeChartOption.value?.serviceName ?? null;
+});
+
+const canInjectFault = computed(() => selectedFaultSourceName.value !== null);
+
+const chartData = computed(() =>
+	store.getChartData(activeChartOption.value?.value ?? null),
+);
+
+const activeChartBounds = computed(() =>
+	store.getChartBounds(activeChartOption.value?.value ?? null),
+);
 
 watch(
 	currentServiceName,
 	(serviceName) => {
 		setFocusedService(serviceName);
+	},
+	{ immediate: true },
+);
+
+watch(
+	chartSwitcherOptions,
+	(options) => {
+		if (options.length === 0) {
+			selectedChartKey.value = null;
+			return;
+		}
+		if (
+			selectedChartKey.value &&
+			options.some((option) => option.value === selectedChartKey.value)
+		) {
+			return;
+		}
+		selectedChartKey.value = options[0]!.value;
 	},
 	{ immediate: true },
 );
@@ -149,11 +227,11 @@ const chartOptions = computed(() => {
 	};
 
 	if (
-		typeof temperatureChartBounds.value.min === "number" &&
-		typeof temperatureChartBounds.value.max === "number"
+		typeof activeChartBounds.value.min === "number" &&
+		typeof activeChartBounds.value.max === "number"
 	) {
-		yScale.min = temperatureChartBounds.value.min;
-		yScale.max = temperatureChartBounds.value.max;
+		yScale.min = activeChartBounds.value.min;
+		yScale.max = activeChartBounds.value.max;
 	}
 
 	return {
@@ -185,6 +263,10 @@ function openSubscribeDialog() {
 function applySubscriptions(serviceNames: string[]) {
 	updateDashboardSubscriptions(serviceNames);
 }
+
+function injectSelectedFault() {
+	injectFault(selectedFaultSourceName.value);
+}
 </script>
 
 <template>
@@ -204,14 +286,22 @@ function applySubscriptions(serviceNames: string[]) {
 					:status="status"
 					:streamState="streamState"
 					:activeServiceSummary="activeServiceSummary"
+					:activeServiceNames="
+						currentSubscriptions.map((serviceName) =>
+							displayServiceName(serviceName),
+						)
+					"
 					@subscribe="openSubscribeDialog"
 				/>
 
 				<DashboardChartCard
 					class="dashboard-card dashboard-card--wide"
 					:title="chartTitle"
-					:data="store.temperatureChartData"
+					:selection="selectedChartKey"
+					:selections="chartSwitcherOptions"
+					:data="chartData"
 					:options="chartOptions"
+					@update:selection="selectedChartKey = $event"
 				/>
 
 				<DashboardMetricsCard
@@ -219,7 +309,7 @@ function applySubscriptions(serviceNames: string[]) {
 					:metrics="metrics"
 					:canInjectFault="canInjectFault"
 					:faultStatus="faultStatus"
-					@inject-fault="injectSimulatorFault"
+					@inject-fault="injectSelectedFault"
 				/>
 
 				<EventSwitcherTable
@@ -227,12 +317,14 @@ function applySubscriptions(serviceNames: string[]) {
 					:recentEvents="recentEvents"
 					:recentValveEvents="recentValveEvents"
 					:mlAlerts="mlAlerts"
+					:serviceDisplayNames="serviceDisplayNames"
 				/>
 
 				<HistoricalSnapshotTable
 					class="dashboard-card dashboard-card--full"
 					:getEventHistorySnapshot="store.getHistoricalEventSnapshot"
 					:getMLAlertHistorySnapshot="store.getHistoricalMLAlertSnapshot"
+					:serviceDisplayNames="serviceDisplayNames"
 				/>
 			</div>
 		</div>

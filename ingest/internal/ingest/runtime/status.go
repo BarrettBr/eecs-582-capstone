@@ -34,6 +34,7 @@ import "time"
 
 type ServiceStatus struct {
 	Name                 string        `json:"name"`
+	AliasName            string        `json:"alias_name,omitempty"`
 	Mode                 string        `json:"mode"`
 	EventType            string        `json:"event_type"`
 	LifecycleState       string        `json:"lifecycle_state"`

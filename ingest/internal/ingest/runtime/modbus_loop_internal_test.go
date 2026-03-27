@@ -31,8 +31,12 @@ Known Faults:
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/BarrettBr/eecs-582-capstone/internal/config"
+	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
 )
 
 func TestDataNormalizerPopulatesTempSample(t *testing.T) {
@@ -89,5 +93,73 @@ func TestSensorTypeFromCode(t *testing.T) {
 
 	if _, err := sensorTypeFromCode(2); err == nil {
 		t.Fatalf("sensorTypeFromCode() invalid code error = nil, want non-nil")
+	}
+}
+
+func TestNextSimulatedRecordReturnsValveSample(t *testing.T) {
+	runner := &sourceRunner{
+		definition: config.SourceDefinition{
+			Name:      "valve_dev",
+			EventType: "valve",
+			Mode:      "simulator",
+		},
+		rng:          rand.New(rand.NewSource(84)),
+		simValveFlow: 145.0,
+		simValveOpen: true,
+	}
+
+	record, err := runner.nextSimulatedRecord()
+	if err != nil {
+		t.Fatalf("nextSimulatedRecord() error = %v", err)
+	}
+
+	sample, ok := record.(ingestevents.ValveSample)
+	if !ok {
+		t.Fatalf("record type = %T, want ingestevents.ValveSample", record)
+	}
+	if sample.EventType() != "valve" {
+		t.Fatalf("sample.EventType() = %q, want %q", sample.EventType(), "valve")
+	}
+	if sample.SensorType != "valve_control_system" {
+		t.Fatalf("sample.SensorType = %q, want %q", sample.SensorType, "valve_control_system")
+	}
+	if sample.ValveNumber != 1 {
+		t.Fatalf("sample.ValveNumber = %d, want 1", sample.ValveNumber)
+	}
+	if sample.FlowRate < 0 || sample.FlowRate > 1000 {
+		t.Fatalf("sample.FlowRate = %v, want value within validation bounds", sample.FlowRate)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, sample.Timestamp); err != nil {
+		t.Fatalf("sample.Timestamp parse error = %v", err)
+	}
+}
+
+func TestNextSimulatedValveRecordFaultInjectionProducesHighFlow(t *testing.T) {
+	runner := &sourceRunner{
+		definition: config.SourceDefinition{
+			Name:      "valve_dev",
+			EventType: "valve",
+			Mode:      "simulator",
+		},
+		rng:             rand.New(rand.NewSource(84)),
+		simValveFlow:    145.0,
+		simValveOpen:    false,
+		forceFaultTicks: 1,
+	}
+
+	record, err := runner.nextSimulatedRecord()
+	if err != nil {
+		t.Fatalf("nextSimulatedRecord() error = %v", err)
+	}
+
+	sample, ok := record.(ingestevents.ValveSample)
+	if !ok {
+		t.Fatalf("record type = %T, want ingestevents.ValveSample", record)
+	}
+	if !sample.IsOpen {
+		t.Fatalf("sample.IsOpen = false, want true during forced fault")
+	}
+	if sample.FlowRate <= 500 {
+		t.Fatalf("sample.FlowRate = %v, want > 500 during forced fault", sample.FlowRate)
 	}
 }

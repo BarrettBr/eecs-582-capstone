@@ -100,6 +100,7 @@ func main() {
 	bufferManager := ingestruntime.NewBufferManager(pipeline, appCfg.Sources.Runtime.Buffering, appCfg.Ingest.BufferChunkSize)
 	registrar, err := ingestruntime.NewRegistrar(ingestruntime.RegistrarConfig{
 		SourceConfigPath:      appCfg.Ingest.SourceConfigPath,
+		SourceProfile:         appCfg.Ingest.SourceProfile,
 		DefaultModbusInterval: appCfg.Ingest.PollInterval,
 		InitialCatalog:        appCfg.Sources,
 		BufferManager:         bufferManager,
@@ -169,6 +170,7 @@ func buildServiceCatalogPayload(snapshot ingestruntime.SystemStatusSnapshot) str
 	for _, service := range snapshot.Services {
 		services = append(services, stream.ServiceCatalogEntry{
 			Name:      service.Name,
+			AliasName: service.AliasName,
 			Mode:      service.Mode,
 			EventType: service.EventType,
 		})

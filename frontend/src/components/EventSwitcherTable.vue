@@ -53,6 +53,7 @@ const props = defineProps<{
 	recentEvents: TempEvent[];
 	recentValveEvents: ValveEvent[];
 	mlAlerts: MLAlert[];
+	serviceDisplayNames: Record<string, string>;
 }>();
 
 const selectedView = ref("events");
@@ -61,6 +62,13 @@ const options = [
 	{ label: "Recent Events", value: "events" },
 	{ label: "ML Alerts", value: "ml" },
 ];
+
+function displayServiceName(serviceName?: string): string {
+	if (!serviceName) {
+		return "-";
+	}
+	return props.serviceDisplayNames[serviceName] ?? serviceName;
+}
 
 const recentEventRows = computed<EventRow[]>(() => {
 	const temperatureRows: EventRow[] = props.recentEvents.map((event) => ({
@@ -120,7 +128,11 @@ const recentEventRows = computed<EventRow[]>(() => {
 					</template>
 				</Column>
 
-				<Column field="service_name" header="Service" sortable />
+				<Column field="service_name" header="Service" sortable>
+					<template #body="{ data }">
+						{{ displayServiceName(data.service_name) }}
+					</template>
+				</Column>
 
 				<Column field="source_label" header="Source" />
 
@@ -163,7 +175,11 @@ const recentEventRows = computed<EventRow[]>(() => {
 					</template>
 				</Column>
 
-				<Column field="service_name" header="Service" sortable />
+				<Column field="service_name" header="Service" sortable>
+					<template #body="{ data }">
+						{{ displayServiceName(data.service_name) }}
+					</template>
+				</Column>
 
 				<Column header="Anomaly">
 					<template #body="{ data }">

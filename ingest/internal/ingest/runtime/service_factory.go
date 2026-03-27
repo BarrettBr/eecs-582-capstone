@@ -82,6 +82,8 @@ func newSourceRunner(definition config.SourceDefinition, defaultModbusInterval t
 		runner.interval = d
 		runner.rng = rand.New(rand.NewSource(definition.Simulator.Seed))
 		runner.simTemp = 68.0
+		runner.simValveFlow = 145.0
+		runner.simValveOpen = true
 	default:
 		return nil, fmt.Errorf("unsupported mode %q", definition.Mode)
 	}

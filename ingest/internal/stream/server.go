@@ -84,6 +84,7 @@ type ClientSession struct {
 // ServiceCatalogEntry is one selectable ingest service exposed to websocket clients.
 type ServiceCatalogEntry struct {
 	Name      string `json:"name"`
+	AliasName string `json:"alias_name,omitempty"`
 	Mode      string `json:"mode"`
 	EventType string `json:"event_type"`
 }

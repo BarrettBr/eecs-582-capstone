@@ -54,6 +54,11 @@ import (
 	"github.com/goburrow/modbus"
 )
 
+const (
+	temperatureFaultRegisterCount = 6
+	valveFaultRegisterCount       = 5
+)
+
 type sourceRunner struct {
 	definition      config.SourceDefinition
 	validator       *ingestvalidation.RuleEngine
@@ -63,6 +68,8 @@ type sourceRunner struct {
 	mu              sync.Mutex
 	rng             *rand.Rand
 	simTemp         float64
+	simValveFlow    float64
+	simValveOpen    bool
 	simStep         uint16
 	forceFaultTicks int
 }
@@ -81,14 +88,35 @@ func (s *sourceRunner) nextRecord() (ingestevents.RecordEvent, error) {
 	}
 }
 
+func (s *sourceRunner) triggerFaultInjection() error {
+	switch s.definition.Mode {
+	case "simulator":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.forceFaultTicks = 10
+		return nil
+	case "modbus":
+		return s.injectModbusFault()
+	default:
+		return fmt.Errorf("service %q does not support fault injection mode %q", s.definition.Name, s.definition.Mode)
+	}
+}
+
 // description: Produces one synthetic temperature record for local development flows.
 // input: None, uses the sourceRunner simulation state and random source.
 // output: Returns one TempSample or an error.
 func (s *sourceRunner) nextSimulatedRecord() (ingestevents.RecordEvent, error) {
-	if s.definition.EventType != "temperature" {
+	switch s.definition.EventType {
+	case "temperature":
+		return s.nextSimulatedTemperatureRecord()
+	case "valve":
+		return s.nextSimulatedValveRecord()
+	default:
 		return nil, fmt.Errorf("source %q simulator does not support event type %q", s.definition.Name, s.definition.EventType)
 	}
+}
 
+func (s *sourceRunner) nextSimulatedTemperatureRecord() (ingestevents.RecordEvent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -125,6 +153,46 @@ func (s *sourceRunner) nextSimulatedRecord() (ingestevents.RecordEvent, error) {
 		FanOn:        fanOn,
 		Temperature:  roundToTenth(s.simTemp),
 		HeaterPower:  roundToHundredth(heaterPower),
+	}, nil
+}
+
+func (s *sourceRunner) nextSimulatedValveRecord() (ingestevents.RecordEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.simStep++
+
+	if s.simStep%18 == 0 {
+		s.simValveOpen = !s.simValveOpen
+	}
+
+	if s.simValveOpen {
+		drift := (s.rng.Float64() - 0.5) * 18.0
+		s.simValveFlow += drift
+		if s.simValveFlow < 110.0 {
+			s.simValveFlow = 110.0
+		}
+		if s.simValveFlow > 220.0 {
+			s.simValveFlow = 220.0
+		}
+	} else {
+		s.simValveFlow = 0
+	}
+
+	if s.forceFaultTicks > 0 {
+		// Drive the valve into a clearly anomalous open-flow state for smoke/demo checks.
+		s.simValveOpen = true
+		s.simValveFlow = 560.0 + s.rng.Float64()*80.0
+		s.forceFaultTicks--
+	}
+
+	return ingestevents.ValveSample{
+		ID:          s.simStep,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339Nano),
+		SensorType:  "valve_control_system",
+		ValveNumber: 1,
+		IsOpen:      s.simValveOpen,
+		FlowRate:    roundToHundredth(s.simValveFlow),
 	}, nil
 }
 
@@ -231,6 +299,59 @@ func normalizeValveRegisters(results []byte) (ingestevents.ValveSample, error) {
 		IsOpen:      binary.BigEndian.Uint16(results[6:8]) == 1,
 		FlowRate:    float64(binary.BigEndian.Uint16(results[8:10])) / 100.0,
 	}, nil
+}
+
+func (s *sourceRunner) injectModbusFault() error {
+	if s.client == nil || s.definition.Modbus == nil {
+		return fmt.Errorf("source %q modbus client unavailable for fault injection", s.definition.Name)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	switch s.definition.EventType {
+	case "temperature":
+		if s.definition.Modbus.RegisterCount < temperatureFaultRegisterCount {
+			return fmt.Errorf("source %q temperature fault injection requires at least %d registers", s.definition.Name, temperatureFaultRegisterCount)
+		}
+		payload := make([]byte, temperatureFaultRegisterCount*2)
+		binary.BigEndian.PutUint16(payload[0:2], 999)
+		binary.BigEndian.PutUint16(payload[2:4], 1)
+		binary.BigEndian.PutUint16(payload[4:6], 1)
+		binary.BigEndian.PutUint16(payload[6:8], 1)
+		binary.BigEndian.PutUint16(payload[8:10], 920)
+		binary.BigEndian.PutUint16(payload[10:12], 0)
+		_, err := s.client.WriteMultipleRegisters(
+			s.definition.Modbus.MWBase,
+			temperatureFaultRegisterCount,
+			payload,
+		)
+		if err != nil {
+			return fmt.Errorf("write temperature fault registers: %w", err)
+		}
+		return nil
+	case "valve":
+		if s.definition.Modbus.RegisterCount < valveFaultRegisterCount {
+			return fmt.Errorf("source %q valve fault injection requires at least %d registers", s.definition.Name, valveFaultRegisterCount)
+		}
+		payload := make([]byte, valveFaultRegisterCount*2)
+		binary.BigEndian.PutUint16(payload[0:2], 999)
+		binary.BigEndian.PutUint16(payload[2:4], 2)
+		binary.BigEndian.PutUint16(payload[4:6], 1)
+		binary.BigEndian.PutUint16(payload[6:8], 1)
+		binary.BigEndian.PutUint16(payload[8:10], 62000)
+		_, err := s.client.WriteMultipleRegisters(
+			s.definition.Modbus.MWBase,
+			valveFaultRegisterCount,
+			payload,
+		)
+		if err != nil {
+			return fmt.Errorf("write valve fault registers: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("source %q unsupported event type %q for modbus fault injection", s.definition.Name, s.definition.EventType)
+	}
 }
 
 func sensorTypeFromCode(code uint16) (string, error) {

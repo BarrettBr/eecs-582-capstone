@@ -32,6 +32,7 @@ Known Faults:
 
 import (
 	"context"
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -100,11 +101,51 @@ func TestManagedServiceTriggerFaultInjectionAndSnapshot(t *testing.T) {
 	}
 }
 
-func TestManagedServiceTriggerFaultInjectionRejectsNonSimulator(t *testing.T) {
+func TestManagedServiceTriggerFaultInjectionWritesModbusTemperatureFault(t *testing.T) {
+	recorder := &modbusClientRecorder{}
 	service := &managedService{
 		definition: config.SourceDefinition{
-			Name: "svc_modbus",
-			Mode: "modbus",
+			Name:      "svc_modbus",
+			Mode:      "modbus",
+			EventType: "temperature",
+			Modbus: &config.ModbusSourceSettings{
+				MWBase:        1024,
+				RegisterCount: 6,
+			},
+		},
+		runner: &sourceRunner{
+			definition: config.SourceDefinition{
+				Name:      "svc_modbus",
+				Mode:      "modbus",
+				EventType: "temperature",
+				Modbus: &config.ModbusSourceSettings{
+					MWBase:        1024,
+					RegisterCount: 6,
+				},
+			},
+			client: recorder,
+		},
+	}
+
+	if err := service.TriggerFaultInjection(); err != nil {
+		t.Fatalf("TriggerFaultInjection() error = %v", err)
+	}
+	if recorder.writeAddress != 1024 {
+		t.Fatalf("writeAddress = %d, want 1024", recorder.writeAddress)
+	}
+	if recorder.writeQuantity != 6 {
+		t.Fatalf("writeQuantity = %d, want 6", recorder.writeQuantity)
+	}
+	if got := binary.BigEndian.Uint16(recorder.writeValue[8:10]); got != 920 {
+		t.Fatalf("temperature register = %d, want 920", got)
+	}
+}
+
+func TestManagedServiceTriggerFaultInjectionRejectsUnavailableRunner(t *testing.T) {
+	service := &managedService{
+		definition: config.SourceDefinition{
+			Name: "svc_missing_runner",
+			Mode: "simulator",
 		},
 	}
 
@@ -176,4 +217,57 @@ func (e staticError) Error() string { return string(e) }
 
 func assertErr(msg string) error {
 	return staticError(msg)
+}
+
+type modbusClientRecorder struct {
+	writeAddress  uint16
+	writeQuantity uint16
+	writeValue    []byte
+}
+
+func (m *modbusClientRecorder) ReadCoils(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) ReadDiscreteInputs(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) WriteSingleCoil(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) WriteMultipleCoils(_ uint16, _ uint16, _ []byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) ReadInputRegisters(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) ReadHoldingRegisters(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) WriteSingleRegister(_ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) WriteMultipleRegisters(address, quantity uint16, value []byte) ([]byte, error) {
+	m.writeAddress = address
+	m.writeQuantity = quantity
+	m.writeValue = append([]byte(nil), value...)
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) ReadWriteMultipleRegisters(_ uint16, _ uint16, _ uint16, _ uint16, _ []byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) MaskWriteRegister(_ uint16, _ uint16, _ uint16) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *modbusClientRecorder) ReadFIFOQueue(_ uint16) ([]byte, error) {
+	return nil, nil
 }

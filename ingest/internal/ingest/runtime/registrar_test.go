@@ -276,6 +276,112 @@ func TestRegistrarRunHotReloadsSourceFile(t *testing.T) {
 	}
 }
 
+func TestRegistrarRunReloadsServiceWhenValidationFileChanges(t *testing.T) {
+	validationDir := t.TempDir()
+	validationPath := filepath.Join(validationDir, "temperature.json")
+	if err := os.WriteFile(validationPath, []byte(`{
+  "required_fields": ["id", "timestamp", "temperature"],
+  "bounds": {
+    "temperature": {
+      "min": 0.0,
+      "max": 100.0
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("os.WriteFile(validation) error = %v", err)
+	}
+
+	sourcePath := filepath.Join(t.TempDir(), "sources.json")
+	bufferingCfg := config.BufferingConfig{
+		SharedUnits:             4,
+		SamplingSharedThreshold: 0.8,
+		Pressure: config.PressureThresholds{
+			ElevatedEnter: 0.70,
+			ElevatedExit:  0.50,
+			HighEnter:     0.85,
+			HighExit:      0.65,
+			CriticalEnter: 0.95,
+			CriticalExit:  0.80,
+		},
+	}
+
+	source := testRegistrarSource("svc_a", validationPath)
+	initialCatalog := &config.SourceCatalog{
+		Runtime: config.SourceRuntimeConfig{Buffering: bufferingCfg},
+		Sources: []config.SourceDefinition{source},
+	}
+	if err := writeSourceCatalog(sourcePath, initialCatalog); err != nil {
+		t.Fatalf("writeSourceCatalog(initial) error = %v", err)
+	}
+
+	loadedCatalog, err := config.LoadSourceCatalog(sourcePath)
+	if err != nil {
+		t.Fatalf("LoadSourceCatalog() error = %v", err)
+	}
+
+	bufferManager := NewBufferManager(&Pipeline{}, loadedCatalog.Runtime.Buffering, 32)
+	registrar, err := NewRegistrar(RegistrarConfig{
+		SourceConfigPath:      sourcePath,
+		DefaultModbusInterval: 5 * time.Millisecond,
+		InitialCatalog:        loadedCatalog,
+		BufferManager:         bufferManager,
+	})
+	if err != nil {
+		t.Fatalf("NewRegistrar() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- registrar.Run(ctx)
+	}()
+
+	waitForStatus(t, 3*time.Second, registrar.StatusSnapshot, func(snapshot SystemStatusSnapshot) bool {
+		return len(snapshot.Services) == 1 &&
+			snapshot.Services[0].Name == "svc_a" &&
+			snapshot.Services[0].LifecycleState == "running"
+	})
+
+	registrar.mu.RLock()
+	initialService := registrar.services["svc_a"]
+	initialReloadAt := registrar.lastReloadAt
+	registrar.mu.RUnlock()
+	if initialService == nil {
+		t.Fatalf("initial service missing")
+	}
+
+	if err := os.WriteFile(validationPath, []byte(`{
+  "required_fields": ["id", "timestamp", "temperature"],
+  "bounds": {
+    "temperature": {
+      "min": 0.0,
+      "max": 85.0
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("os.WriteFile(updated validation) error = %v", err)
+	}
+
+	waitForStatus(t, 4*time.Second, registrar.StatusSnapshot, func(snapshot SystemStatusSnapshot) bool {
+		if len(snapshot.Services) != 1 || snapshot.Services[0].LifecycleState != "running" {
+			return false
+		}
+		registrar.mu.RLock()
+		defer registrar.mu.RUnlock()
+		currentService := registrar.services["svc_a"]
+		return currentService != nil &&
+			currentService != initialService &&
+			registrar.lastReloadAt.After(initialReloadAt)
+	})
+
+	cancel()
+	if err := <-runDone; err != nil && err != context.Canceled {
+		t.Fatalf("registrar.Run() error = %v", err)
+	}
+}
+
 func testRegistrarSource(name, validationPath string) config.SourceDefinition {
 	return config.SourceDefinition{
 		Name:           name,

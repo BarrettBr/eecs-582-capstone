@@ -85,6 +85,10 @@ import Button from "primevue/button";
 							<Tag value="Running" severity="success" />
 						</div>
 						<div class="list-row">
+							<span>valve_dev simulator</span>
+							<Tag value="Running" severity="success" />
+						</div>
+						<div class="list-row">
 							<span>temp_plc source</span>
 							<Tag value="Disabled" severity="secondary" />
 						</div>

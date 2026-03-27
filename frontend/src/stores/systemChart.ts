@@ -1,5 +1,5 @@
 // Name: stores/systemChart.ts
-// Description: Encapsulates the rolling temperature chart state used by the dashboard store.
+// Description: Encapsulates the rolling live chart state used by the dashboard store.
 // Programmers: Adam Berry, Barrett Brown
 // Creation Date: 3/1
 // Revision Dates: 3/14 Barrett Brown
@@ -11,7 +11,12 @@
 // Known Faults: None
 
 import { ref } from "vue";
-import type { TempEventData } from "@/stores/systemTypes";
+import type {
+	ServiceCatalogEntry,
+	ServiceEventType,
+	TempEventData,
+	ValveEventData,
+} from "@/stores/systemTypes";
 import {
 	formatDisplayTime,
 	resolveTimestampMs,
@@ -31,29 +36,104 @@ const CHART_Y_STEP = 1;
 const CHART_Y_MIN_RANGE = 4;
 const CHART_Y_SHRINK_DELAY_MS = 10_000;
 
-export function createTemperatureChartState() {
-	let chartBuckets: ChartBucket[] = [];
-	let chartShrinkLockedUntilMs = 0;
+interface LiveChartPresentation {
+	datasetLabel: string;
+	cardTitle: string;
+	borderColor: string;
+	minFloor?: number;
+}
 
-	const temperatureChartData = ref({
-		labels: [] as string[],
+interface LiveChartSeriesState {
+	presentation: LiveChartPresentation;
+	chartBuckets: ChartBucket[];
+	chartShrinkLockedUntilMs: number;
+}
+
+export interface LiveChartOption {
+	key: string;
+	serviceName: string;
+	eventType: ServiceEventType;
+	label: string;
+	title: string;
+}
+
+type ChartDataset = {
+	label: string;
+	data: Array<number | undefined>;
+	fill: boolean;
+	borderColor: string;
+	tension: number;
+};
+
+type LiveChartData = {
+	labels: string[];
+	datasets: [ChartDataset];
+};
+
+type LiveChartBounds = {
+	min: number | null;
+	max: number | null;
+};
+
+const EMPTY_CHART_BOUNDS: LiveChartBounds = {
+	min: null,
+	max: null,
+};
+
+const CHART_PRESENTATIONS: Record<ServiceEventType, LiveChartPresentation> = {
+	temperature: {
+		datasetLabel: "Temperature",
+		cardTitle: "Live Temperature",
+		borderColor: "#10b981",
+	},
+	valve: {
+		datasetLabel: "Valve Flow Rate",
+		cardTitle: "Live Valve Flow",
+		borderColor: "#0ea5e9",
+		minFloor: 0,
+	},
+};
+
+export function buildLiveChartKey(
+	serviceName: string,
+	eventType: ServiceEventType,
+): string {
+	return `${serviceName}:${eventType}`;
+}
+
+export function buildLiveChartOption(
+	service: Pick<ServiceCatalogEntry, "name" | "alias_name" | "event_type">,
+): LiveChartOption {
+	const presentation = CHART_PRESENTATIONS[service.event_type];
+	const displayName = service.alias_name?.trim() || service.name;
+	return {
+		key: buildLiveChartKey(service.name, service.event_type),
+		serviceName: service.name,
+		eventType: service.event_type,
+		label: `${displayName} ${presentation.datasetLabel}`,
+		title: `${presentation.cardTitle} - ${displayName}`,
+	};
+}
+
+function createChartData(presentation: LiveChartPresentation): LiveChartData {
+	return {
+		labels: [],
 		datasets: [
 			{
-				label: "Temperature",
-				data: [] as Array<number | undefined>,
+				label: presentation.datasetLabel,
+				data: [],
 				fill: false,
-				borderColor: "#10b981",
+				borderColor: presentation.borderColor,
 				tension: 0.4,
 			},
 		],
-	});
-	const temperatureChartBounds = ref<{
-		min: number | null;
-		max: number | null;
-	}>({
-		min: null,
-		max: null,
-	});
+	};
+}
+
+export function createLiveChartState() {
+	const chartStateByKey = new Map<string, LiveChartSeriesState>();
+	const liveChartData = ref<Record<string, LiveChartData>>({});
+	const liveChartBounds = ref<Record<string, LiveChartBounds>>({});
 
 	function alignBucketStart(timestampMs: number): number {
 		return (
@@ -69,22 +149,55 @@ export function createTemperatureChartState() {
 		};
 	}
 
-	function resetChartBuckets(latestBucketStartMs: number): void {
-		chartBuckets = [];
+	function ensureChartState(
+		chartKey: string,
+		eventType: ServiceEventType,
+	): LiveChartSeriesState {
+		const existing = chartStateByKey.get(chartKey);
+		if (existing) {
+			return existing;
+		}
+
+		const presentation = CHART_PRESENTATIONS[eventType];
+		const created: LiveChartSeriesState = {
+			presentation,
+			chartBuckets: [],
+			chartShrinkLockedUntilMs: 0,
+		};
+		chartStateByKey.set(chartKey, created);
+		liveChartData.value = {
+			...liveChartData.value,
+			[chartKey]: createChartData(presentation),
+		};
+		liveChartBounds.value = {
+			...liveChartBounds.value,
+			[chartKey]: { ...EMPTY_CHART_BOUNDS },
+		};
+		return created;
+	}
+
+	function resetChartBuckets(
+		state: LiveChartSeriesState,
+		latestBucketStartMs: number,
+	): void {
+		state.chartBuckets = [];
 		for (let index = CHART_POINT_LIMIT - 1; index >= 0; index -= 1) {
-			chartBuckets.push(
+			state.chartBuckets.push(
 				createEmptyBucket(latestBucketStartMs - index * CHART_BUCKET_WIDTH_MS),
 			);
 		}
 	}
 
-	function advanceChartBuckets(latestBucketStartMs: number): void {
-		if (chartBuckets.length === 0) {
-			resetChartBuckets(latestBucketStartMs);
+	function advanceChartBuckets(
+		state: LiveChartSeriesState,
+		latestBucketStartMs: number,
+	): void {
+		if (state.chartBuckets.length === 0) {
+			resetChartBuckets(state, latestBucketStartMs);
 			return;
 		}
 
-		const currentLatestBucket = chartBuckets[chartBuckets.length - 1]!;
+		const currentLatestBucket = state.chartBuckets[state.chartBuckets.length - 1]!;
 		if (latestBucketStartMs <= currentLatestBucket.bucketStartMs) {
 			return;
 		}
@@ -94,27 +207,38 @@ export function createTemperatureChartState() {
 				CHART_BUCKET_WIDTH_MS,
 		);
 		if (bucketShift >= CHART_POINT_LIMIT) {
-			resetChartBuckets(latestBucketStartMs);
+			resetChartBuckets(state, latestBucketStartMs);
 			return;
 		}
 
 		for (let index = 0; index < bucketShift; index += 1) {
-			chartBuckets.shift();
+			state.chartBuckets.shift();
 			const nextBucketStartMs =
 				currentLatestBucket.bucketStartMs + (index + 1) * CHART_BUCKET_WIDTH_MS;
-			chartBuckets.push(createEmptyBucket(nextBucketStartMs));
+			state.chartBuckets.push(createEmptyBucket(nextBucketStartMs));
 		}
 	}
 
-	function appendSample(event: TempEventData): void {
-		const timestampMs = resolveTimestampMs(event.timestamp, event.timestamp_ms);
-		const bucketStartMs = alignBucketStart(timestampMs);
-		advanceChartBuckets(bucketStartMs);
-		if (chartBuckets.length === 0) {
+	function appendSample(
+		chartKey: string,
+		eventType: ServiceEventType,
+		timestamp: string,
+		timestampMsInput: number | undefined,
+		value: number | undefined,
+	): void {
+		if (typeof value !== "number") {
 			return;
 		}
 
-		const oldestBucketStartMs = chartBuckets[0]!.bucketStartMs;
+		const state = ensureChartState(chartKey, eventType);
+		const timestampMs = resolveTimestampMs(timestamp, timestampMsInput);
+		const bucketStartMs = alignBucketStart(timestampMs);
+		advanceChartBuckets(state, bucketStartMs);
+		if (state.chartBuckets.length === 0) {
+			return;
+		}
+
+		const oldestBucketStartMs = state.chartBuckets[0]!.bucketStartMs;
 		if (bucketStartMs < oldestBucketStartMs) {
 			return;
 		}
@@ -122,119 +246,168 @@ export function createTemperatureChartState() {
 		const bucketIndex = Math.floor(
 			(bucketStartMs - oldestBucketStartMs) / CHART_BUCKET_WIDTH_MS,
 		);
-		const bucket = chartBuckets[bucketIndex];
-		if (!bucket || typeof event.temperature !== "number") {
+		const bucket = state.chartBuckets[bucketIndex];
+		if (!bucket) {
 			return;
 		}
 
-		bucket.sum += event.temperature;
+		bucket.sum += value;
 		bucket.count += 1;
 	}
 
-	function flush(): void {
-		if (chartBuckets.length === 0) {
-			reset();
+	function appendTemperatureSample(event: TempEventData): void {
+		if (!event.service_name) {
 			return;
 		}
-
-		const labels = new Array<string>(CHART_POINT_LIMIT);
-		const temperatures = new Array<number | undefined>(CHART_POINT_LIMIT);
-		for (let index = 0; index < CHART_POINT_LIMIT; index += 1) {
-			const bucket = chartBuckets[index]!;
-			labels[index] = formatDisplayTime(bucket.bucketStartMs);
-			if (bucket.count > 0) {
-				temperatures[index] = bucket.sum / bucket.count;
-			}
-		}
-
-		const definedTemperatures = temperatures.filter(
-			(value): value is number => typeof value === "number",
+		appendSample(
+			buildLiveChartKey(event.service_name, "temperature"),
+			"temperature",
+			event.timestamp,
+			event.timestamp_ms,
+			event.temperature,
 		);
-		if (definedTemperatures.length > 0) {
-			const observedMin = Math.min(...definedTemperatures);
-			const observedMax = Math.max(...definedTemperatures);
-			const observedRange = Math.max(0.1, observedMax - observedMin);
-			const padding = Math.max(
-				CHART_Y_MIN_PADDING,
-				observedRange * CHART_Y_PADDING_RATIO,
-			);
-			let targetMin =
-				Math.floor((observedMin - padding) / CHART_Y_STEP) * CHART_Y_STEP;
-			let targetMax =
-				Math.ceil((observedMax + padding) / CHART_Y_STEP) * CHART_Y_STEP;
-			if (targetMax - targetMin < CHART_Y_MIN_RANGE) {
-				const midpoint = (targetMin + targetMax) / 2;
-				const halfRange = CHART_Y_MIN_RANGE / 2;
-				targetMin =
-					Math.floor((midpoint - halfRange) / CHART_Y_STEP) * CHART_Y_STEP;
-				targetMax = targetMin + CHART_Y_MIN_RANGE;
-			}
-			const currentMin = temperatureChartBounds.value.min;
-			const currentMax = temperatureChartBounds.value.max;
-			const nowMs = Date.now();
+	}
 
-			if (
-				currentMin === null ||
-				currentMax === null ||
-				observedMin < currentMin ||
-				observedMax > currentMax
-			) {
-				temperatureChartBounds.value = {
-					min: targetMin,
-					max: targetMax,
-				};
-				chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
-			} else if (
-				nowMs >= chartShrinkLockedUntilMs &&
-				targetMin >= currentMin + CHART_Y_STEP &&
-				targetMax <= currentMax - CHART_Y_STEP
-			) {
-				temperatureChartBounds.value = {
-					min: targetMin,
-					max: targetMax,
-				};
-				chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
+	function appendValveSample(event: ValveEventData): void {
+		if (!event.service_name) {
+			return;
+		}
+		appendSample(
+			buildLiveChartKey(event.service_name, "valve"),
+			"valve",
+			event.timestamp,
+			event.timestamp_ms,
+			event.flow_rate,
+		);
+	}
+
+	function flush(): void {
+		const nextChartData: Record<string, LiveChartData> = {};
+		const nextChartBounds: Record<string, LiveChartBounds> = {};
+
+		for (const [chartKey, state] of chartStateByKey.entries()) {
+			if (state.chartBuckets.length === 0) {
+				nextChartData[chartKey] = createChartData(state.presentation);
+				nextChartBounds[chartKey] = { ...EMPTY_CHART_BOUNDS };
+				continue;
 			}
+
+			const labels = new Array<string>(CHART_POINT_LIMIT);
+			const values = new Array<number | undefined>(CHART_POINT_LIMIT);
+			for (let index = 0; index < CHART_POINT_LIMIT; index += 1) {
+				const bucket = state.chartBuckets[index]!;
+				labels[index] = formatDisplayTime(bucket.bucketStartMs);
+				if (bucket.count > 0) {
+					values[index] = bucket.sum / bucket.count;
+				}
+			}
+
+			const definedValues = values.filter(
+				(value): value is number => typeof value === "number",
+			);
+			const currentBounds =
+				liveChartBounds.value[chartKey] ?? { ...EMPTY_CHART_BOUNDS };
+			let nextBounds = currentBounds;
+
+			if (definedValues.length > 0) {
+				const observedMin = Math.min(...definedValues);
+				const observedMax = Math.max(...definedValues);
+				const observedRange = Math.max(0.1, observedMax - observedMin);
+				const padding = Math.max(
+					CHART_Y_MIN_PADDING,
+					observedRange * CHART_Y_PADDING_RATIO,
+				);
+				let targetMin =
+					Math.floor((observedMin - padding) / CHART_Y_STEP) * CHART_Y_STEP;
+				let targetMax =
+					Math.ceil((observedMax + padding) / CHART_Y_STEP) * CHART_Y_STEP;
+				if (typeof state.presentation.minFloor === "number") {
+					targetMin = Math.max(state.presentation.minFloor, targetMin);
+				}
+				if (targetMax - targetMin < CHART_Y_MIN_RANGE) {
+					const midpoint = (targetMin + targetMax) / 2;
+					const halfRange = CHART_Y_MIN_RANGE / 2;
+					targetMin =
+						Math.floor((midpoint - halfRange) / CHART_Y_STEP) * CHART_Y_STEP;
+					targetMax = targetMin + CHART_Y_MIN_RANGE;
+					if (typeof state.presentation.minFloor === "number") {
+						targetMin = Math.max(state.presentation.minFloor, targetMin);
+						targetMax = Math.max(targetMin + CHART_Y_MIN_RANGE, targetMax);
+					}
+				}
+				const nowMs = Date.now();
+
+				if (
+					currentBounds.min === null ||
+					currentBounds.max === null ||
+					observedMin < currentBounds.min ||
+					observedMax > currentBounds.max
+				) {
+					nextBounds = {
+						min: targetMin,
+						max: targetMax,
+					};
+					state.chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
+				} else if (
+					nowMs >= state.chartShrinkLockedUntilMs &&
+					targetMin >= currentBounds.min + CHART_Y_STEP &&
+					targetMax <= currentBounds.max - CHART_Y_STEP
+				) {
+					nextBounds = {
+						min: targetMin,
+						max: targetMax,
+					};
+					state.chartShrinkLockedUntilMs = nowMs + CHART_Y_SHRINK_DELAY_MS;
+				}
+			}
+
+			nextChartBounds[chartKey] = nextBounds;
+			nextChartData[chartKey] = {
+				labels,
+				datasets: [
+					{
+						label: state.presentation.datasetLabel,
+						fill: false,
+						borderColor: state.presentation.borderColor,
+						tension: 0.4,
+						data: values,
+					},
+				],
+			};
 		}
 
-		const currentDataset = temperatureChartData.value.datasets[0]!;
-		temperatureChartData.value = {
-			labels,
-			datasets: [
-				{
-					label: currentDataset.label,
-					fill: currentDataset.fill,
-					borderColor: currentDataset.borderColor,
-					tension: currentDataset.tension,
-					data: temperatures,
-				},
-			],
-		};
+		liveChartData.value = nextChartData;
+		liveChartBounds.value = nextChartBounds;
+	}
+
+	function getChartData(chartKey: string | null): LiveChartData {
+		if (!chartKey) {
+			return createChartData(CHART_PRESENTATIONS.temperature);
+		}
+		return liveChartData.value[chartKey] ?? createChartData(CHART_PRESENTATIONS.temperature);
+	}
+
+	function getChartBounds(chartKey: string | null): LiveChartBounds {
+		if (!chartKey) {
+			return { ...EMPTY_CHART_BOUNDS };
+		}
+		return liveChartBounds.value[chartKey] ?? { ...EMPTY_CHART_BOUNDS };
 	}
 
 	function reset(): void {
-		chartBuckets = [];
-		chartShrinkLockedUntilMs = 0;
-		temperatureChartBounds.value = {
-			min: null,
-			max: null,
-		};
-		temperatureChartData.value = {
-			labels: [],
-			datasets: [
-				{
-					...temperatureChartData.value.datasets[0]!,
-					data: [],
-				},
-			],
-		};
+		chartStateByKey.clear();
+		liveChartData.value = {};
+		liveChartBounds.value = {};
 	}
 
 	return {
-		temperatureChartData,
-		temperatureChartBounds,
-		appendSample,
+		liveChartData,
+		liveChartBounds,
+		appendTemperatureSample,
+		appendValveSample,
 		flush,
 		reset,
+		getChartData,
+		getChartBounds,
 	};
 }

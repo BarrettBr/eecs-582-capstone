@@ -17,16 +17,16 @@ import type {
 	TempEventData,
 	ValveEventData,
 } from "@/stores/systemTypes";
-import type { createTemperatureChartState } from "@/stores/systemChart";
+import type { createLiveChartState } from "@/stores/systemChart";
 
 const LIVE_EVENT_LIMIT = 8;
 const LIVE_ALERT_LIMIT = 8;
 
-type TemperatureChartState = ReturnType<typeof createTemperatureChartState>;
+type LiveChartState = ReturnType<typeof createLiveChartState>;
 
 export function createDashboardState(
 	uiFlushIntervalMs: number,
-	temperatureChart: TemperatureChartState,
+	liveChart: LiveChartState,
 ) {
 	const recentEvents = ref<TempEventData[]>([]);
 	const recentValveEvents = ref<ValveEventData[]>([]);
@@ -91,6 +91,7 @@ export function createDashboardState(
 	function queueValveEvent(event: ValveEventData): void {
 		pendingValveEvents.push(event);
 		pendingRecordDelta += 1;
+		pendingChartDirty = true;
 		if (
 			event.display_timestamp &&
 			event.timestamp_ms &&
@@ -128,7 +129,7 @@ export function createDashboardState(
 				LIVE_EVENT_LIMIT,
 			);
 			for (const event of pendingTempEvents) {
-				temperatureChart.appendSample(event);
+				liveChart.appendTemperatureSample(event);
 			}
 		}
 
@@ -141,6 +142,9 @@ export function createDashboardState(
 				pendingValveEvents,
 				LIVE_EVENT_LIMIT,
 			);
+			for (const event of pendingValveEvents) {
+				liveChart.appendValveSample(event);
+			}
 		}
 
 		if (hasMLAlerts) {
@@ -162,7 +166,7 @@ export function createDashboardState(
 			metrics.value.lastIngest = pendingLastIngestLabel;
 		}
 		if (pendingChartDirty) {
-			temperatureChart.flush();
+			liveChart.flush();
 		}
 		if (hasTempEvents || hasValveEvents || hasMLAlerts) {
 			updateActiveAlerts();
@@ -216,7 +220,7 @@ export function createDashboardState(
 		historicalEventBuffer = [];
 		historicalValveEventBuffer = [];
 		historicalMLAlertBuffer = [];
-		temperatureChart.reset();
+		liveChart.reset();
 	}
 
 	function clearTimers(): void {

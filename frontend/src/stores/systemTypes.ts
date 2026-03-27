@@ -17,6 +17,8 @@ export interface SystemStatus {
 	ml: string;
 }
 
+export type ServiceEventType = "temperature" | "valve";
+
 export interface TempEventData {
 	event_type?: "temperature";
 	id?: number;
@@ -69,8 +71,9 @@ export interface IngestionMetricsResponse {
 
 export interface ServiceCatalogEntry {
 	name: string;
+	alias_name?: string;
 	mode: string;
-	event_type: string;
+	event_type: ServiceEventType;
 	admitted_eps_5s?: number;
 }
 

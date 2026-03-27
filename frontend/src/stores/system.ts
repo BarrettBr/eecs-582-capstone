@@ -28,7 +28,7 @@ import {
 	normalizeTempEvent,
 	normalizeValveEvent,
 } from "@/stores/systemFormatters";
-import { createTemperatureChartState } from "@/stores/systemChart";
+import { createLiveChartState } from "@/stores/systemChart";
 import { createDashboardState } from "@/stores/systemDashboardState";
 import type {
 	IngestionMetricsResponse,
@@ -62,8 +62,8 @@ export const useSystemStore = defineStore("system", () => {
 	const streamState = ref("Connecting...");
 	let socket: ManagedWebSocket | null = null;
 
-	const temperatureChart = createTemperatureChartState();
-	const dashboardState = createDashboardState(uiFlushIntervalMs, temperatureChart);
+	const liveChart = createLiveChartState();
+	const dashboardState = createDashboardState(uiFlushIntervalMs, liveChart);
 	const {
 		recentEvents,
 		recentValveEvents,
@@ -236,13 +236,17 @@ export const useSystemStore = defineStore("system", () => {
 		syncSubscriptions();
 	}
 
-	function injectSimulatorFault(): void {
+	function injectFault(sourceName?: string | null): void {
+		const targetSourceName =
+			typeof sourceName === "string" && sourceName.trim() !== ""
+				? sourceName
+				: focusedServiceName.value || selectedDashboardServices.value[0] || "";
 		const sent = sendSocket(socket, {
 			kind: "inject_fault",
 			source: "frontend",
 			timestamp: new Date().toISOString(),
 			data: {
-				source_name: "temp_dev",
+				source_name: targetSourceName,
 			},
 		});
 		faultStatus.value = sent ? "Injected" : "Failed to send";
@@ -373,7 +377,7 @@ export const useSystemStore = defineStore("system", () => {
 		faultStatus,
 		status,
 		metrics,
-		injectSimulatorFault,
+		injectFault,
 		loadAvailableServices,
 		startStream,
 		stopStream,
@@ -381,7 +385,9 @@ export const useSystemStore = defineStore("system", () => {
 		updateDashboardSubscriptions,
 		getHistoricalEventSnapshot,
 		getHistoricalMLAlertSnapshot,
-		temperatureChartData: temperatureChart.temperatureChartData,
-		temperatureChartBounds: temperatureChart.temperatureChartBounds,
+		liveChartData: liveChart.liveChartData,
+		liveChartBounds: liveChart.liveChartBounds,
+		getChartData: liveChart.getChartData,
+		getChartBounds: liveChart.getChartBounds,
 	};
 });

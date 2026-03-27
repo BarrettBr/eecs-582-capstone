@@ -54,6 +54,7 @@ type managedService struct {
 	submitter       bufferSubmitter
 	baseInterval    time.Duration
 	definitionKey   string
+	validationKey   string
 	mu              sync.RWMutex
 	lifecycleState  string
 	lastError       string
@@ -78,6 +79,7 @@ func newManagedService(definition config.SourceDefinition, defaultModbusInterval
 		submitter:       submitter,
 		baseInterval:    runner.interval,
 		definitionKey:   sourceDefinitionFingerprint(definition),
+		validationKey:   config.FileContentSignature(definition.ValidationFile),
 		lifecycleState:  "stopped",
 		pressureState:   PressureNormal,
 		currentInterval: runner.interval,
@@ -213,18 +215,15 @@ func (s *managedService) SetPressureState(state PressureState) {
 }
 
 func (s *managedService) TriggerFaultInjection() error {
-	if s.definition.Mode != "simulator" {
-		return fmt.Errorf("service %q does not support fault injection", s.definition.Name)
+	if s.runner == nil {
+		return fmt.Errorf("service %q runner unavailable for fault injection", s.definition.Name)
 	}
-
-	s.runner.mu.Lock()
-	defer s.runner.mu.Unlock()
-	s.runner.forceFaultTicks = 10
-	return nil
+	return s.runner.triggerFaultInjection()
 }
 
 func (s *managedService) MatchesDefinition(definition config.SourceDefinition) bool {
-	return s.definitionKey == sourceDefinitionFingerprint(definition)
+	return s.definitionKey == sourceDefinitionFingerprint(definition) &&
+		s.validationKey == config.FileContentSignature(definition.ValidationFile)
 }
 
 func (s *managedService) interval() time.Duration {
@@ -239,6 +238,7 @@ func (s *managedService) snapshot() ServiceStatus {
 
 	return ServiceStatus{
 		Name:                 s.definition.Name,
+		AliasName:            s.definition.AliasName,
 		Mode:                 s.definition.Mode,
 		EventType:            s.definition.EventType,
 		LifecycleState:       s.lifecycleState,
@@ -281,6 +281,7 @@ func sourceDefinitionFingerprint(definition config.SourceDefinition) string {
 	builder.Grow(256)
 
 	appendStringFingerprintPart(&builder, definition.Name)
+	appendStringFingerprintPart(&builder, definition.AliasName)
 	appendStringFingerprintPart(&builder, definition.EventType)
 	appendStringFingerprintPart(&builder, definition.Mode)
 	appendStringFingerprintPart(&builder, definition.ValidationFile)

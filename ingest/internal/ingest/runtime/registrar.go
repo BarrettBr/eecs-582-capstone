@@ -45,6 +45,7 @@ import (
 
 type RegistrarConfig struct {
 	SourceConfigPath      string
+	SourceProfile         string
 	DefaultModbusInterval time.Duration
 	InitialCatalog        *config.SourceCatalog
 	BufferManager         *BufferManager
@@ -53,6 +54,7 @@ type RegistrarConfig struct {
 
 type Registrar struct {
 	sourceConfigPath      string
+	sourceProfile         string
 	defaultModbusInterval time.Duration
 	bufferManager         *BufferManager
 
@@ -63,6 +65,8 @@ type Registrar struct {
 	lastReloadAt     time.Time
 	lastReloadError  string
 	onCatalogApplied func(SystemStatusSnapshot, []string)
+	runCtx           context.Context
+	validationStop   context.CancelFunc
 }
 
 // description: Builds a Registrar with source config path, initial catalog, and shared BufferManager.
@@ -78,6 +82,7 @@ func NewRegistrar(cfg RegistrarConfig) (*Registrar, error) {
 
 	r := &Registrar{
 		sourceConfigPath:      cfg.SourceConfigPath,
+		sourceProfile:         cfg.SourceProfile,
 		defaultModbusInterval: cfg.DefaultModbusInterval,
 		bufferManager:         cfg.BufferManager,
 		services:              make(map[string]*managedService),
@@ -93,6 +98,10 @@ func NewRegistrar(cfg RegistrarConfig) (*Registrar, error) {
 // input: context used to stop the registrar and all managed services.
 // output: Returns the context error or a startup failure.
 func (r *Registrar) Run(ctx context.Context) error {
+	r.mu.Lock()
+	r.runCtx = ctx
+	r.mu.Unlock()
+
 	if r.currentCatalog == nil {
 		return fmt.Errorf("registrar requires initial catalog")
 	}
@@ -112,6 +121,13 @@ func (r *Registrar) Run(ctx context.Context) error {
 	<-ctx.Done()
 
 	r.mu.Lock()
+	if r.validationStop != nil {
+		r.validationStop()
+		r.validationStop = nil
+	}
+	r.mu.Unlock()
+
+	r.mu.Lock()
 	services := make([]*managedService, 0, len(r.services))
 	for _, service := range r.services {
 		services = append(services, service)
@@ -128,7 +144,7 @@ func (r *Registrar) Run(ctx context.Context) error {
 // input: context used for any service restarts during reload.
 // output: Returns nil when the reload succeeds.
 func (r *Registrar) Reload(ctx context.Context) error {
-	catalog, err := config.LoadSourceCatalog(r.sourceConfigPath)
+	catalog, err := config.LoadSourceCatalogWithProfile(r.sourceConfigPath, r.sourceProfile)
 	if err != nil {
 		r.setReloadError(err)
 		return err
@@ -336,6 +352,7 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 	r.lastReloadAt = time.Now().UTC()
 	r.lastReloadError = ""
 	r.mu.Unlock()
+	r.restartValidationWatcher(catalog)
 	if !initial {
 		log.Printf("Registrar applied source reload from %s", r.sourceConfigPath)
 	}
@@ -349,4 +366,58 @@ func (r *Registrar) setReloadError(err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.lastReloadError = err.Error()
+}
+
+func (r *Registrar) restartValidationWatcher(catalog *config.SourceCatalog) {
+	r.mu.RLock()
+	runCtx := r.runCtx
+	r.mu.RUnlock()
+	if runCtx == nil || catalog == nil {
+		return
+	}
+
+	paths := validationPathsFromCatalog(catalog)
+
+	r.mu.Lock()
+	if r.validationStop != nil {
+		r.validationStop()
+		r.validationStop = nil
+	}
+	if len(paths) == 0 {
+		r.mu.Unlock()
+		return
+	}
+	watchCtx, cancel := context.WithCancel(runCtx)
+	r.validationStop = cancel
+	r.mu.Unlock()
+
+	go func() {
+		if err := config.WatchFilesByHash(watchCtx, paths, 200*time.Millisecond, func() error {
+			return r.Reload(runCtx)
+		}); err != nil && watchCtx.Err() == nil {
+			r.setReloadError(err)
+			log.Printf("Registrar validation watch error: %v", err)
+		}
+	}()
+}
+
+func validationPathsFromCatalog(catalog *config.SourceCatalog) []string {
+	if catalog == nil {
+		return nil
+	}
+
+	paths := make([]string, 0, len(catalog.Sources))
+	seen := make(map[string]struct{}, len(catalog.Sources))
+	for _, source := range catalog.Sources {
+		if !source.Enabled || source.ValidationFile == "" {
+			continue
+		}
+		if _, ok := seen[source.ValidationFile]; ok {
+			continue
+		}
+		seen[source.ValidationFile] = struct{}{}
+		paths = append(paths, source.ValidationFile)
+	}
+	slices.Sort(paths)
+	return paths
 }
