@@ -217,7 +217,7 @@ func writeAdminConfigFixture(t *testing.T) adminConfigPaths {
 			"temperature": {Min: float64Ptr(-100), Max: float64Ptr(200)},
 		},
 		AnomalyRules: []ingestvalidation.AnomalyRule{
-			{Field: "temperature", Op: ">", Value: 77, Label: "temperature_high"},
+			{Field: "temperature", Op: ">", Value: 80, Label: "temperature_high"},
 		},
 	})
 	writeTestJSON(t, valveValidationPath, ingestvalidation.ValidationSpec{
