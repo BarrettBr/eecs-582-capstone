@@ -1,7 +1,7 @@
 """
 Artifact: KMeans Anomaly Detection Service
 Description: Runs KMeans anomaly detection on TempSample data and can serve results over HTTP for the ingest pipeline
-Author: Jacob Kice, Barrett Brown
+Authors: Jacob Kice, Barrett Brown, Adam Berry
 Date Created: 02/24/2026
 Date Revised: 03/01/2026
 Preconditions: Input data is valid json with temperature sample fields and sklearn dependencies are installed
@@ -31,6 +31,7 @@ from utilities.checkpointing import (
     temperature_model_is_ready,
     update_recent_history,
     warmup_from_database,
+    build_temperature_baseline_model
 )
 
 import numpy as np
@@ -38,6 +39,8 @@ import pandas as pd
 from sklearn.decomposition import PCA
 
 logger = logging.getLogger(__name__)
+SERVER_HOST = "127.0.0.1"
+PORT_NUM = 8000
 
 def load_samples_from_json(json_source):
     """
@@ -114,7 +117,7 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
         df["anomaly_label"] = ""
         return df
 
-    #  If the model isn't ready then 
+    #  If the model isn't ready then
     if not temperature_model_is_ready(model_state):
         logger.info("temperature model isn't ready")
         model_state = build_temperature_baseline_model(
@@ -491,7 +494,7 @@ class MLRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def serve(host="127.0.0.1", port=8000, clusters=3, percentile=95):
+def serve(host=SERVER_HOST, port=PORT_NUM, clusters=3, percentile=95):
     """
     Starts the HTTP API server.
     Args:
@@ -641,7 +644,7 @@ def main():
     if args.warmup_db:
         # Perform gradual warmup if requested
         if args.gradual_warmup:
-            print("Starting gradual warmup with checkpointing...")
+            logger.info("Starting gradual warmup with checkpointing...")
             if not gradual_warmup_from_database(
                 args.warmup_db,
                 batch_size=args.warmup_batch_size,
@@ -654,8 +657,8 @@ def main():
                 return
 
         # Perform regular database warmup if specified (but not gradual)
-        if args.gradual_warmup:
-            print(f"Attempting to warmup from database: {args.warmup_db}")
+        if not args.gradual_warmup:
+            logger.info("Attempting to warmup from database: %s", args.warmup_db)
             if not warmup_from_database(
                 args.warmup_db,
                 args.warmup_db_limit,
@@ -664,7 +667,7 @@ def main():
             ):
                 logger.error("Database warmup failed, continuing without warmup data")
 
-    # Serve used as a "Hey this is in live production" skip over the manual just this testing
+    # Spins up the test server
     if args.serve:
         serve(
             host=args.host,
@@ -676,33 +679,6 @@ def main():
 
     if not args.input:
         logger.error("input is required unless --serve is used")
-
-    # CLI mode keeps working for local batch testing
-    event_type, df = load_samples_from_json(args.input)
-    if event_type == "temperature":
-        result_df, result, _ = analyze_temperature_batch(
-            df,
-            n_clusters=args.clusters,
-            outlier_percentile=args.percentile,
-        )
-        if args.plot_output:
-            result["visualization"] = {
-                "path": save_temperature_visualization(
-                    result_df,
-                    args.plot_output,
-                    title=args.plot_title,
-                )
-            }
-    elif event_type == "valve":
-        if args.plot_output:
-            raise ValueError(
-                "visualization output is only supported for temperature batches"
-            )
-        result = analyze_valve(df)
-    else:
-        raise ValueError(f"unsupported event_type: {event_type}")
-    print(json.dumps(result))
-
 
 if __name__ == "__main__":
     main()

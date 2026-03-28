@@ -1,3 +1,19 @@
+"""
+Artifact: ML checkpointing service
+Description: Persists ML checkpoint state, maintains retained warmup history, and rebuilds the reusable temperature baseline model across process restarts
+Authors: Minh Vu, Adam Berry
+Date Created: ~, file created 03/28/2026
+Date Revised: 03/28/2026
+Preconditions: callers provide valid SQLite paths or checkpoint files when using warmup and restore flows
+Postconditions: Checkpoints can be saved and restored, recent sample history is retained in memory, and the temperature baseline model can be rebuilt from retained history
+Possible errors: File I/O failures, pickle deserialization failures, SQLite access/query failures, and invalid or insufficient retained data for baseline model construction
+Side effects: Creates the checkpoints directory if needed, reads and writes checkpoint files, loads historical samples from SQLite, and mutates module-level checkpoint and history state
+Invariants: Checkpoint state remains keyed by model name, retained history stays bounded per event type, and restored temperature models must include scaler, clusterer, and threshold data
+Known faults: Warmup and restore paths depend on schema and serialized model compatibility, and very small or low-variety temperature history cannot produce a baseline model
+"""
+
+
+
 import time
 import pickle
 import sqlite3
