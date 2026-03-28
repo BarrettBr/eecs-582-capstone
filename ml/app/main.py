@@ -22,12 +22,17 @@ import sys
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import logging
+import matplotlib
+import matplotlib.pyplot as plt
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+
+logger = logging.getLogger(__name__)
 
 TEMPERATURE_HISTORY_LIMIT = 512
 VALVE_HISTORY_LIMIT = 128
@@ -81,10 +86,10 @@ class ModelCheckpoint:
         try:
             with open(checkpoint_path, "wb") as f:
                 pickle.dump(checkpoint_data, f)
-            print(f"Checkpoint saved: {checkpoint_path}")
+            logger.info("Checkpoint saved: %s", checkpoint_path)
             return checkpoint_path
         except Exception as e:
-            print(f"Failed to save checkpoint: {e}")
+            logger.warning("Failed to save checkpoint: %s", e)
             return None
 
     def load_checkpoint(self, checkpoint_path):
@@ -92,7 +97,7 @@ class ModelCheckpoint:
         Load model state and training progress from checkpoint.
         """
         if not os.path.exists(checkpoint_path):
-            print(f"Checkpoint not found: {checkpoint_path}")
+            logger.warning("Checkpoint not found: %s", checkpoint_path)
             return False
 
         try:
@@ -109,10 +114,10 @@ class ModelCheckpoint:
             RECENT_HISTORY = checkpoint_data.get("recent_history", RECENT_HISTORY)
 
             saved_at = checkpoint_data.get("saved_at", "unknown")
-            print(f"Checkpoint loaded: {checkpoint_path} (saved at {saved_at})")
+            logger.warning("Checkpoint loaded: %s (saved at %s)", checkpoint_path, saved_at)
             return True
         except Exception as e:
-            print(f"Failed to load checkpoint: {e}")
+            logger.warning("Failed to load checkpoint: %s", e)
             return False
 
     def get_latest_checkpoint(self):
@@ -211,7 +216,7 @@ def warmup_from_database(db_path, limit=32, n_clusters=3, outlier_percentile=95)
                 n_clusters=n_clusters,
                 outlier_percentile=outlier_percentile,
             )
-            print(f"Loaded {len(temp_df)} temperature samples from database")
+            logger.info("Loaded %s temperature samples from database", len(temp_df))
 
         # Extract valve samples in chronological order for consistency.
         cursor.execute(
@@ -242,21 +247,21 @@ def warmup_from_database(db_path, limit=32, n_clusters=3, outlier_percentile=95)
             valve_df = pd.DataFrame(valve_samples)
             update_recent_history("valve", valve_df)
             checkpoint_manager.update_training_state(len(valve_df))
-            print(f"Loaded {len(valve_df)} valve samples from database")
+            logger.info("Loaded %s valve samples from database", len(valve_df))
 
         conn.close()
 
         if not temp_rows and not valve_rows:
-            print("No historical data found in database")
+            logger.info("No historical data found in database")
             return False
 
         final_checkpoint = checkpoint_manager.save_checkpoint("final_warmup")
-        print(f"Regular warmup completed! Final checkpoint: {final_checkpoint}")
+        logger.info("Regular warmup completed! Final checkpoint: %s", final_checkpoint)
 
         return True
 
     except sqlite3.Error as err:
-        print(f"Warning: Failed to load data from database: {err}")
+        logger.warning("Warning: Failed to load data from database: %s", err)
         return False
 
 
@@ -272,8 +277,8 @@ def gradual_warmup_from_database(
     Gradually warmup models from database with checkpointing.
     Processes data in batches and saves checkpoints periodically.
     """
-    print(f"Starting gradual warmup from database: {db_path}")
-    print(f"Batch size: {batch_size}, Checkpoint interval: {checkpoint_interval}")
+    logger.info("Starting gradual warmup from database: %s", db_path)
+    logger.info("Batch size: %s, Checkpoint interval: %s", batch_size, checkpoint_interval)
 
     try:
         conn = sqlite3.connect(db_path)
@@ -286,9 +291,7 @@ def gradual_warmup_from_database(
         cursor.execute("SELECT COUNT(*) FROM valve_samples")
         total_valve = cursor.fetchone()[0]
 
-        print(
-            f"Database contains: {total_temp} temperature samples, {total_valve} valve samples"
-        )
+        logger.info("Database contains: %s temperature samples, %s valve samples", total_temp, total_valve)
 
         # Process temperature samples in batches
         if total_temp > 0:
@@ -335,9 +338,7 @@ def gradual_warmup_from_database(
                     # Update training state
                     checkpoint_manager.update_training_state(len(temp_samples))
 
-                    print(
-                        f"Temperature batch: {offset + len(temp_samples)}/{min(limit, total_temp)} samples"
-                    )
+                    logger.info("Temperature batch: %s/%s samples", (offset + len(temp_samples)), min(limit, total_temp))
 
                     # Save checkpoint periodically
                     if (offset + len(temp_samples)) % checkpoint_interval == 0:
@@ -388,9 +389,7 @@ def gradual_warmup_from_database(
                     # Update training state
                     checkpoint_manager.update_training_state(len(valve_samples))
 
-                    print(
-                        f"Valve batch: {offset + len(valve_samples)}/{min(limit, total_valve)} samples"
-                    )
+                    logger.info("Valve batch: %s/%s samples", (offset + len(valve_samples)), (min(limit, total_valve)))
 
                     # Save checkpoint periodically
                     if (offset + len(valve_samples)) % checkpoint_interval == 0:
@@ -410,12 +409,12 @@ def gradual_warmup_from_database(
 
         # Final checkpoint
         final_checkpoint = checkpoint_manager.save_checkpoint("final_warmup")
-        print(f"Gradual warmup completed! Final checkpoint: {final_checkpoint}")
+        logger.info("Gradual warmup completed! Final checkpoint: %s", final_checkpoint)
 
         return True
 
     except sqlite3.Error as err:
-        print(f"Database warmup failed: {err}")
+        logger.warning("Database warmup failed: %s", err)
         return False
 
 
@@ -425,10 +424,10 @@ def load_latest_checkpoint():
     """
     latest_checkpoint = checkpoint_manager.get_latest_checkpoint()
     if latest_checkpoint:
-        print(f"Found latest checkpoint: {latest_checkpoint}")
+        logger.info("Found latest checkpoint: %s", latest_checkpoint)
         return checkpoint_manager.load_checkpoint(latest_checkpoint)
     else:
-        print("No checkpoints found, starting fresh")
+        logger.info("No checkpoints found, starting fresh")
         return False
 
 
@@ -545,12 +544,15 @@ def dataframe_from_request(data):
     if isinstance(data, list):
         return "temperature", pd.DataFrame(data)
     if not isinstance(data, dict):
+        logger.warning("Request body must be an object with event_type and sample")
         raise ValueError("Request body must be an object with event_type and samples")
     event_type = data.get("event_type")
     if not isinstance(event_type, str) or not event_type.strip():
+        logger.warning("Request body must include event_type")
         raise ValueError("Request body must include event_type")
     samples = data.get("samples")
     if not isinstance(samples, list):
+        logger.warning("Request body must include samples as a list")
         raise ValueError("Request body must include samples as a list")
     return event_type, pd.DataFrame(samples)
 
@@ -588,7 +590,9 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
         df["anomaly_label"] = ""
         return df
 
+    #  If the model isn't ready then 
     if not temperature_model_is_ready(model_state):
+        logger.info("temperature model isn't ready")
         model_state = build_temperature_baseline_model(
             df,
             n_clusters=n_clusters,
@@ -751,6 +755,7 @@ def analyze_temperature_batch(df, n_clusters=3, outlier_percentile=95):
     required = {"fan_on", "temperature", "heater_power"}
     missing = sorted(required.difference(df.columns))
     if missing:
+        logger.warning("temperature samples missing fields: %s", missing)
         raise ValueError(f'temperature samples missing fields: {", ".join(missing)}')
 
     model_state = checkpoint_manager.models.get("temperature_kmeans")
@@ -785,19 +790,19 @@ def save_temperature_visualization(result_df, output_path, title=None):
             Absolute path to the saved image.
     """
     if result_df.empty:
+        logger.warning("Tried to save an empty temperature batch")
         raise ValueError("cannot visualize an empty temperature batch")
 
     features = prepare_temperature_features(result_df)
     if len(features) < 2:
+        logger.warning("Less than two samples")
         raise ValueError(
             "at least two temperature samples are required to visualize clusters"
         )
 
     try:
-        import matplotlib
 
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
     except ImportError as err:
         raise RuntimeError(
             "matplotlib is required to generate visualization output"
@@ -916,6 +921,8 @@ def analyze_samples(data, n_clusters=3, outlier_percentile=95):
         )
     if event_type == "valve":
         return analyze_valve(df)
+
+    logger.warning("unsupported event type: %s", event_type)
     raise ValueError(f"unsupported event_type: {event_type}")
 
 
@@ -931,6 +938,7 @@ class MLRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         # Accept only / and /analyze routes
         if self.path not in ("/", "/analyze"):
+            logger.warning("Path not found: %s", self.path)
             self.write_json({"error": "not_found"}, 404)
             return
 
@@ -944,9 +952,11 @@ class MLRequestHandler(BaseHTTPRequestHandler):
                 payload, n_clusters=self.clusters, outlier_percentile=self.percentile
             )
         except (json.JSONDecodeError, ValueError, KeyError) as err:
+            logger.warning("failed to decode JSON: %s", err)
             self.write_json({"error": str(err)}, 400)
             return
         except Exception as err:
+            logger.warning("Exception in ML request handling: %s", err)
             self.write_json({"error": str(err)}, 500)
             return
 
@@ -1006,7 +1016,7 @@ def serve(host="127.0.0.1", port=8000, clusters=3, percentile=95):
                 f"ML API could not bind to http://{host}:{port} because that host address is not available on this machine."
             ) from err
         raise
-    print(f"ML API listening on http://{host}:{port}")
+    logger.info("ML API listening on http://%s:%s", host, port)
     server.serve_forever()
 
 
@@ -1115,32 +1125,34 @@ def main():
     # Load specific checkpoint if requested (overrides auto-loading)
     if args.load_checkpoint:
         if not checkpoint_manager.load_checkpoint(args.load_checkpoint):
-            print("Failed to load specified checkpoint, continuing without it")
+            logger.warning("Gradual warmup failed")
 
-    # Perform gradual warmup if requested
-    if args.gradual_warmup and args.warmup_db:
-        print("Starting gradual warmup with checkpointing...")
-        if not gradual_warmup_from_database(
-            args.warmup_db,
-            batch_size=args.warmup_batch_size,
-            checkpoint_interval=args.checkpoint_interval,
-            max_samples=args.max_warmup_samples,
-            n_clusters=args.clusters,
-            outlier_percentile=args.percentile,
-        ):
-            print("Gradual warmup failed")
-        return
+    # if we are asked to do warmup
+    if args.warmup_db:
+        # Perform gradual warmup if requested
+        if args.gradual_warmup:
+            print("Starting gradual warmup with checkpointing...")
+            if not gradual_warmup_from_database(
+                args.warmup_db,
+                batch_size=args.warmup_batch_size,
+                checkpoint_interval=args.checkpoint_interval,
+                max_samples=args.max_warmup_samples,
+                n_clusters=args.clusters,
+                outlier_percentile=args.percentile,
+            ):
+                logger.warning("Gradual warmup failed")
+            return
 
-    # Perform regular database warmup if specified (but not gradual)
-    if args.warmup_db and not args.gradual_warmup:
-        print(f"Attempting to warmup from database: {args.warmup_db}")
-        if not warmup_from_database(
-            args.warmup_db,
-            args.warmup_db_limit,
-            n_clusters=args.clusters,
-            outlier_percentile=args.percentile,
-        ):
-            print("Database warmup failed, continuing without warmup data")
+        # Perform regular database warmup if specified (but not gradual)
+        if args.gradual_warmup:
+            print(f"Attempting to warmup from database: {args.warmup_db}")
+            if not warmup_from_database(
+                args.warmup_db,
+                args.warmup_db_limit,
+                n_clusters=args.clusters,
+                outlier_percentile=args.percentile,
+            ):
+                logger.warning("Database warmup failed, continuing without warmup data")
 
     # Serve used as a "Hey this is in live production" skip over the manual just this testing
     if args.serve:
