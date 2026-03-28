@@ -27,8 +27,31 @@ interface MLAlert {
 	generated_at: string;
 	display_time?: string;
 	has_anomaly: boolean;
+	severity?: string;
 	labels: string[];
+	confidence?: number;
+	probable_cause?: string;
+	recommended_action?: string;
 	score?: number;
+}
+
+function severityTag(value?: string): "danger" | "warning" | "info" | "success" | "secondary" {
+	switch ((value ?? "").toLowerCase()) {
+		case "high":
+			return "danger";
+		case "medium":
+			return "warning";
+		case "low":
+			return "info";
+		case "info":
+			return "secondary";
+		default:
+			return "secondary";
+	}
+}
+
+function formatMetric(value?: number): string {
+	return typeof value === "number" ? value.toFixed(2) : "-";
 }
 
 interface HistoricalEventRow {
@@ -258,7 +281,32 @@ onMounted(() => {
 					</template>
 				</Column>
 
-				<Column field="score" header="Score" sortable />
+				<Column header="Severity">
+					<template #body="{ data }">
+						<Tag
+							:value="data.severity || '-'"
+							:severity="severityTag(data.severity)"
+						/>
+					</template>
+				</Column>
+
+				<Column header="Confidence">
+					<template #body="{ data }">
+						{{ formatMetric(data.confidence) }}
+					</template>
+				</Column>
+
+				<Column header="Cause">
+					<template #body="{ data }">
+						{{ data.probable_cause || "-" }}
+					</template>
+				</Column>
+
+				<Column field="score" header="Score" sortable>
+					<template #body="{ data }">
+						{{ formatMetric(data.score) }}
+					</template>
+				</Column>
 			</DataTable>
 		</template>
 	</Card>

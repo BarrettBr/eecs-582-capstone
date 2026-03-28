@@ -58,7 +58,11 @@ export interface MLAnomalyPayload {
 	generated_at_ms?: number;
 	display_time?: string;
 	has_anomaly: boolean;
+	severity?: "info" | "low" | "medium" | "high" | string;
 	labels: string[];
+	confidence?: number;
+	probable_cause?: string;
+	recommended_action?: string;
 	score?: number;
 	raw_response: unknown;
 }

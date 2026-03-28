@@ -33,6 +33,95 @@ from sklearn.decomposition import PCA
 
 logger = logging.getLogger(__name__)
 
+
+def infer_response_severity(score, anomaly_count, sample_count):
+    """
+    Classify anomaly severity from the current score and batch concentration.
+    Args:
+            score: Maximum anomaly score for the batch, or None.
+            anomaly_count: Number of anomalous samples in the batch.
+            sample_count: Total number of samples in the batch.
+    Returns:
+            Severity string for downstream UI and report consumers.
+    """
+    if anomaly_count <= 0:
+        return "info"
+
+    ratio = anomaly_count / max(1, sample_count)
+    if score is None:
+        if ratio >= 0.5:
+            return "high"
+        if ratio >= 0.2:
+            return "medium"
+        return "low"
+
+    if score >= 3.0 or ratio >= 0.5:
+        return "high"
+    if score >= 1.5 or ratio >= 0.2:
+        return "medium"
+    return "low"
+
+
+def infer_confidence(score, has_anomaly):
+    """
+    Convert the current score into a bounded confidence-like value.
+    Args:
+            score: Maximum anomaly score for the batch, or None.
+            has_anomaly: Whether the batch contains at least one anomaly.
+    Returns:
+            Confidence float in the range [0, 1].
+    """
+    if score is None:
+        return 0.85 if has_anomaly else 0.35
+    return float(max(0.0, min(1.0, score / 3.0)))
+
+
+def infer_probable_cause(event_type, labels):
+    """
+    Map ML labels into a short human-readable probable cause.
+    Args:
+            event_type: Event type associated with the batch.
+            labels: Deduplicated anomaly labels.
+    Returns:
+            Short probable cause text.
+    """
+    label_set = set(labels)
+    if "kmeans_outlier" in label_set:
+        return "Temperature behavior deviated from the recent operating range."
+    if "valve_flow_while_closed" in label_set:
+        return "Valve flow was detected while the valve state was closed."
+    if "valve_flow_out_of_range" in label_set:
+        return "Valve flow was outside the expected range for the open state."
+    if event_type == "temperature":
+        return "Temperature readings fell outside the recent cluster baseline."
+    if event_type == "valve":
+        return "Valve telemetry did not match the expected operating state."
+    return "Observed behavior deviated from the recent baseline."
+
+
+def infer_recommended_action(event_type, labels, severity):
+    """
+    Map ML labels into a short operator-facing recommendation.
+    Args:
+            event_type: Event type associated with the batch.
+            labels: Deduplicated anomaly labels.
+            severity: Severity bucket for the current anomaly response.
+    Returns:
+            Short recommended action text.
+    """
+    label_set = set(labels)
+    if "valve_flow_while_closed" in label_set:
+        return "Inspect the valve actuator and confirm the closed-state signal matches physical flow."
+    if "valve_flow_out_of_range" in label_set:
+        return "Inspect the valve and downstream line for blockage, leakage, or misreported open state."
+    if event_type == "temperature":
+        if severity == "high":
+            return "Inspect the heater, fan, and sensor path immediately for unstable or unsafe operation."
+        return "Review recent heater and fan behavior and confirm the sensor remains calibrated."
+    if event_type == "valve":
+        return "Review valve state transitions and verify the flow sensor reading is plausible."
+    return "Review the affected service and compare the latest readings against recent normal behavior."
+
 def dataframe_from_request(data):
     """
     Converts either the raw sample list or the ingest request body into a DataFrame.
@@ -175,6 +264,10 @@ def build_anomaly_response(result_df, event_type, model):
             "model": model,
             "event_type": event_type,
             "has_anomaly": False,
+            "severity": "info",
+            "confidence": 0.0,
+            "probable_cause": "",
+            "recommended_action": "",
             "label": "",
             "labels": [],
             "score": None,
@@ -211,10 +304,16 @@ def build_anomaly_response(result_df, event_type, model):
         else None
     )
     has_anomaly = len(anomalies) > 0
+    severity = infer_response_severity(max_score, len(anomalies), len(result_df))
+    confidence = infer_confidence(max_score, has_anomaly)
     return {
         "model": model,
         "event_type": event_type,
         "has_anomaly": has_anomaly,
+        "severity": severity,
+        "confidence": confidence,
+        "probable_cause": infer_probable_cause(event_type, labels),
+        "recommended_action": infer_recommended_action(event_type, labels, severity),
         "label": labels[0] if labels else "",
         "labels": labels,
         "score": max_score,

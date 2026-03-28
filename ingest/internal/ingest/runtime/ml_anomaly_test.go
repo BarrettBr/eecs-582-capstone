@@ -32,11 +32,15 @@ Known Faults:
 import "testing"
 
 func TestNormalizeMLAnomalyPayload(t *testing.T) {
-	raw := []byte(`{"is_anomaly":true,"label":"overheat","score":0.97}`)
+	raw := []byte(`{"is_anomaly":true,"label":"overheat","score":0.97,"severity":"high","confidence":0.91,"probable_cause":"Sensor spike","recommended_action":"Inspect service"}`)
 	parsed := map[string]any{
-		"is_anomaly": true,
-		"label":      "overheat",
-		"score":      0.97,
+		"is_anomaly":         true,
+		"label":              "overheat",
+		"score":              0.97,
+		"severity":           "high",
+		"confidence":         0.91,
+		"probable_cause":     "Sensor spike",
+		"recommended_action": "Inspect service",
 	}
 
 	payload := normalizeMLAnomalyPayload("svc_temp", "temperature", parsed, raw)
@@ -51,6 +55,18 @@ func TestNormalizeMLAnomalyPayload(t *testing.T) {
 	}
 	if payload.Score == nil || *payload.Score != 0.97 {
 		t.Fatalf("Score = %v, want 0.97", payload.Score)
+	}
+	if payload.Confidence == nil || *payload.Confidence != 0.91 {
+		t.Fatalf("Confidence = %v, want 0.91", payload.Confidence)
+	}
+	if payload.Severity != "high" {
+		t.Fatalf("Severity = %q, want %q", payload.Severity, "high")
+	}
+	if payload.ProbableCause != "Sensor spike" {
+		t.Fatalf("ProbableCause = %q, want %q", payload.ProbableCause, "Sensor spike")
+	}
+	if payload.RecommendedAction != "Inspect service" {
+		t.Fatalf("RecommendedAction = %q, want %q", payload.RecommendedAction, "Inspect service")
 	}
 	if string(payload.RawResponse) != string(raw) {
 		t.Fatalf("RawResponse = %q, want %q", string(payload.RawResponse), string(raw))
@@ -85,11 +101,13 @@ func TestNormalizeMLAnomalyPayloadFallsBackToDefaultLabel(t *testing.T) {
 }
 
 func TestNormalizeMLAnomalyPayloadExtractsNestedLabelsAndScoreOnce(t *testing.T) {
-	raw := []byte(`{"result":{"labels":[" overheat ","overheat","pressure"],"score":0.88}}`)
+	raw := []byte(`{"result":{"labels":[" overheat ","overheat","pressure"],"score":0.88,"confidence":0.73,"severity":"medium"}}`)
 	parsed := map[string]any{
 		"result": map[string]any{
-			"labels": []any{" overheat ", "overheat", "pressure"},
-			"score":  0.88,
+			"labels":     []any{" overheat ", "overheat", "pressure"},
+			"score":      0.88,
+			"confidence": 0.73,
+			"severity":   "medium",
 		},
 	}
 
@@ -102,5 +120,11 @@ func TestNormalizeMLAnomalyPayloadExtractsNestedLabelsAndScoreOnce(t *testing.T)
 	}
 	if payload.Score == nil || *payload.Score != 0.88 {
 		t.Fatalf("Score = %v, want 0.88", payload.Score)
+	}
+	if payload.Confidence == nil || *payload.Confidence != 0.73 {
+		t.Fatalf("Confidence = %v, want 0.73", payload.Confidence)
+	}
+	if payload.Severity != "medium" {
+		t.Fatalf("Severity = %q, want %q", payload.Severity, "medium")
 	}
 }

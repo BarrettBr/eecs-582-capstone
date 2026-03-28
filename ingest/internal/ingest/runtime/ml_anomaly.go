@@ -37,15 +37,19 @@ import (
 
 // MLAnomalyPayload is the stable payload shape sent to the frontend for ML results.
 type MLAnomalyPayload struct {
-	Schema        string          `json:"schema"`
-	ServiceName   string          `json:"service_name,omitempty"`
-	EventType     string          `json:"event_type"`
-	GeneratedAt   string          `json:"generated_at"`
-	GeneratedAtMs int64           `json:"generated_at_ms"`
-	HasAnomaly    bool            `json:"has_anomaly"`
-	Labels        []string        `json:"labels"`
-	Score         *float64        `json:"score,omitempty"`
-	RawResponse   json.RawMessage `json:"raw_response"`
+	Schema            string          `json:"schema"`
+	ServiceName       string          `json:"service_name,omitempty"`
+	EventType         string          `json:"event_type"`
+	GeneratedAt       string          `json:"generated_at"`
+	GeneratedAtMs     int64           `json:"generated_at_ms"`
+	HasAnomaly        bool            `json:"has_anomaly"`
+	Severity          string          `json:"severity,omitempty"`
+	Labels            []string        `json:"labels"`
+	Confidence        *float64        `json:"confidence,omitempty"`
+	ProbableCause     string          `json:"probable_cause,omitempty"`
+	RecommendedAction string          `json:"recommended_action,omitempty"`
+	Score             *float64        `json:"score,omitempty"`
+	RawResponse       json.RawMessage `json:"raw_response"`
 }
 
 func normalizeMLAnomalyPayload(serviceName, eventType string, parsed any, raw []byte) MLAnomalyPayload {
@@ -65,6 +69,13 @@ func normalizeMLAnomalyPayload(serviceName, eventType string, parsed any, raw []
 	if score != nil {
 		payload.Score = score
 	}
+	confidence := extractConfidence(parsed)
+	if confidence != nil {
+		payload.Confidence = confidence
+	}
+	payload.Severity = extractSeverity(parsed)
+	payload.ProbableCause = extractStringField(parsed, "probable_cause", "cause", "summary")
+	payload.RecommendedAction = extractStringField(parsed, "recommended_action", "action", "recommendation")
 
 	payload.Labels = extractLabels(parsed)
 	if len(payload.Labels) > 0 {
@@ -146,7 +157,7 @@ func extractScore(value any) *float64 {
 	case map[string]any:
 		for key, item := range v {
 			switch strings.ToLower(key) {
-			case "score", "anomaly_score", "confidence":
+			case "score", "anomaly_score":
 				if num, ok := asFloat64(item); ok {
 					score := num
 					return &score
@@ -165,6 +176,84 @@ func extractScore(value any) *float64 {
 		}
 	}
 	return nil
+}
+
+func extractConfidence(value any) *float64 {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			switch strings.ToLower(key) {
+			case "confidence":
+				if num, ok := asFloat64(item); ok {
+					confidence := num
+					return &confidence
+				}
+			default:
+				if nested := extractConfidence(item); nested != nil {
+					return nested
+				}
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if nested := extractConfidence(item); nested != nil {
+				return nested
+			}
+		}
+	}
+	return nil
+}
+
+func extractSeverity(value any) string {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			switch strings.ToLower(key) {
+			case "severity":
+				if s, ok := item.(string); ok {
+					return strings.TrimSpace(s)
+				}
+			default:
+				if nested := extractSeverity(item); nested != "" {
+					return nested
+				}
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if nested := extractSeverity(item); nested != "" {
+				return nested
+			}
+		}
+	}
+	return ""
+}
+
+func extractStringField(value any, names ...string) string {
+	nameSet := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		nameSet[strings.ToLower(name)] = struct{}{}
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			if _, ok := nameSet[strings.ToLower(key)]; ok {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					return strings.TrimSpace(s)
+				}
+			}
+			if nested := extractStringField(item, names...); nested != "" {
+				return nested
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if nested := extractStringField(item, names...); nested != "" {
+				return nested
+			}
+		}
+	}
+	return ""
 }
 
 func dedupeStrings(values []string) []string {
