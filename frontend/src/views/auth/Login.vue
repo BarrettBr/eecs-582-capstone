@@ -11,6 +11,7 @@
 -->
 <script setup>
 import { ref } from "vue";
+import { RouterView } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
 import Card from "primevue/card";
@@ -20,8 +21,8 @@ import Password from "primevue/password";
 
 const authStore = useAuthStore();
 
-const username = ref("");
-const password = ref("");
+const username = ref("test");
+const password = ref("test");
 
 const handleLogin = async () => {
 	try {
@@ -33,7 +34,8 @@ const handleLogin = async () => {
 </script>
 
 <template>
-	<div class="page">
+	<RouterView v-if="authStore.isLoggedIn" />
+	<div v-else class="page">
 		<Card class="login-card">
 			<template #title>
 				<div class="title">Login</div>

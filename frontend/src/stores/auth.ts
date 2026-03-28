@@ -55,14 +55,18 @@ export const useAuthStore = defineStore("auth", {
 			this.error = null;
 			try {
 				const response = await apiHelper.login(username, password);
-				const token = response.data.token; // adjust to your API
-				this.username = username;
+				const token = response.data.access_token;
+				this.username = response.data.username || username;
 				this.token = token;
 				saveStoredAuth({ username: this.username, token: this.token });
 
 				router.push("/dashboard"); // optional, can be in component
 			} catch (err: any) {
-				this.error = err.response?.data?.message || "Login failed";
+				this.error =
+					err.response?.data?.message ||
+					err.response?.data?.error_description ||
+					err.response?.data?.error ||
+					"Login failed";
 				throw err; // allow component to react too
 			}
 		},
@@ -82,6 +86,5 @@ export const useAuthStore = defineStore("auth", {
 
 	getters: {
 		isLoggedIn: (state) => !!state.token,
-		authHeader: (state) => (state.token ? `Bearer ${state.token}` : null),
 	},
 });

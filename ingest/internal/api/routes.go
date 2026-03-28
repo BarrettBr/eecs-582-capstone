@@ -91,6 +91,7 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		sourceConfigPath: cfg.SourceConfigPath,
 		sourceProfile:    cfg.SourceProfile,
 	}
+	ensureSeedAuthUser(apiCfg.queries)
 
 	pingPath := path.Join(apiCfg.basePath, "ping")
 	historyPath := path.Join(apiCfg.basePath, "history", "{kind}", "{window}")
@@ -98,6 +99,9 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 	ingestionStatusPath := path.Join(apiCfg.basePath, "ingestion", "status")
 	ingestionMetricsPath := path.Join(apiCfg.basePath, "ingestion", "metrics")
 	adminConfigPath := path.Join(apiCfg.basePath, "admin", "config")
+	oauthTokenPath := path.Join(apiCfg.basePath, "oauth", "token")
+	oauthRevokePath := path.Join(apiCfg.basePath, "oauth", "revoke")
+	authMePath := path.Join(apiCfg.basePath, "auth", "me")
 	routes := map[string]http.HandlerFunc{
 		"GET " + pingPath:             apiCfg.pingHandler,
 		"GET " + historyPath:          apiCfg.historyHandler,
@@ -107,6 +111,12 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		"GET " + adminConfigPath:      apiCfg.adminConfigHandler,
 		"PUT " + adminConfigPath:      apiCfg.adminConfigHandler,
 		"OPTIONS " + adminConfigPath:  apiCfg.optionsHandler,
+		"POST " + oauthTokenPath:      apiCfg.tokenHandler,
+		"POST " + oauthRevokePath:     apiCfg.revokeHandler,
+		"GET " + authMePath:           apiCfg.meHandler,
+		"OPTIONS " + oauthTokenPath:   apiCfg.authOptionsHandler,
+		"OPTIONS " + oauthRevokePath:  apiCfg.authOptionsHandler,
+		"OPTIONS " + authMePath:       apiCfg.authOptionsHandler,
 	}
 
 	for pattern, handler := range routes {

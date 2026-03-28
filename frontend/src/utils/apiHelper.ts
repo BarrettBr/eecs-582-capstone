@@ -12,7 +12,9 @@ import axios from "axios";
 import router from "@/router";
 
 const API_BASE_URL =
-	import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+	import.meta.env.VITE_API_BASE_URL ||
+	import.meta.env.VITE_API_URL ||
+	"http://localhost:8080/api/v1";
 
 const api = axios.create({
 	baseURL: API_BASE_URL,
@@ -35,6 +37,7 @@ api.interceptors.response.use(
 	(response) => response,
 	(error) => {
 		if (error.response?.status === 401) {
+			localStorage.removeItem("auth");
 			// avoid importing the store here — use router directly
 			router.push("/login");
 		}
@@ -44,12 +47,18 @@ api.interceptors.response.use(
 
 export default {
 	login: async (username: string, password: string) => {
-		return api.post("/auth/login", { username, password });
+		const payload = new URLSearchParams({
+			grant_type: "password",
+			username,
+			password,
+		});
+		return api.post("/oauth/token", payload, {
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+		});
 	},
 	logout: async () => {
-		return api.post("/auth/logout"); // optional, depends on API
-	},
-	getUserProfile: async () => {
-		return api.get("/auth/me");
+		return api.post("/oauth/revoke");
 	},
 };
