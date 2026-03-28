@@ -240,7 +240,7 @@ def visualize_clusters(features, labels, method):
         labels: Cluster assignments.
         method: String name of clustering method.
     Returns:
-        None.
+        the matplot showing the clusters
     '''
     pca = PCA(n_components=2)
     reduced = pca.fit_transform(features)
