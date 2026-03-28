@@ -11,23 +11,20 @@ Side effects: Creates the checkpoints directory if needed, reads and writes chec
 Invariants: Checkpoint state remains keyed by model name, retained history stays bounded per event type, and restored temperature models must include scaler, clusterer, and threshold data
 Known faults: Warmup and restore paths depend on schema and serialized model compatibility, and very small or low-variety temperature history cannot produce a baseline model
 """
-
-
-
-import time
+import os
 import pickle
 import sqlite3
-import logging
-import os
+import time
 from datetime import datetime
+import logging
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 # Global checkpoint manager
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -526,3 +523,30 @@ def load_latest_checkpoint():
     else:
         logger.info("No checkpoints found, starting fresh")
         return False
+
+def initialize_checkpointing(args):
+    if args.warmup_db:
+        # Perform gradual warmup if requested
+        if args.gradual_warmup:
+            logger.info("Starting gradual warmup with checkpointing...")
+            if not gradual_warmup_from_database(
+                args.warmup_db,
+                batch_size=args.warmup_batch_size,
+                checkpoint_interval=args.checkpoint_interval,
+                max_samples=args.max_warmup_samples,
+                n_clusters=args.clusters,
+                outlier_percentile=args.percentile,
+            ):
+                logger.error("Gradual warmup failed")
+                return
+
+        # Perform regular database warmup if specified (but not gradual)
+        if not args.gradual_warmup:
+            logger.info("Attempting to warmup from database: %s", args.warmup_db)
+            if not warmup_from_database(
+                args.warmup_db,
+                args.warmup_db_limit,
+                n_clusters=args.clusters,
+                outlier_percentile=args.percentile,
+            ):
+                logger.error("Database warmup failed, continuing without warmup data")
