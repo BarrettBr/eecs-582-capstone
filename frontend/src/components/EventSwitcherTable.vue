@@ -121,10 +121,19 @@ const recentEventRows = computed<EventRow[]>(() => {
 				:value="recentEventRows"
 				stripedRows
 				size="small"
+				tableStyle="table-layout: fixed"
 			>
-				<Column field="timestamp" header="Time" sortable>
+				<Column
+					field="timestamp"
+					header="Time"
+					sortable
+					headerClass="table-col-time"
+					bodyClass="table-col-time"
+				>
 					<template #body="{ data }">
-						{{ data.display_time ?? data.timestamp }}
+						<span class="timestamp-cell">
+							{{ data.display_time ?? data.timestamp }}
+						</span>
 					</template>
 				</Column>
 
@@ -135,9 +144,16 @@ const recentEventRows = computed<EventRow[]>(() => {
 				</Column>
 
 				<Column field="source_label" header="Source" />
-
-				<Column field="reading_label" header="Reading" />
-
+				<Column
+					field="reading_label"
+					header="Reading"
+					headerClass="table-col-reading"
+					bodyClass="table-col-reading"
+				>
+					<template #body="{ data }">
+						<span class="reading-cell">{{ data.reading_label }}</span>
+					</template>
+				</Column>
 				<Column header="State">
 					<template #body="{ data }">
 						<Tag
@@ -147,7 +163,11 @@ const recentEventRows = computed<EventRow[]>(() => {
 					</template>
 				</Column>
 
-				<Column header="Alerts">
+				<Column
+					header="Alerts"
+					headerClass="table-col-alerts"
+					bodyClass="table-col-alerts"
+				>
 					<template #body="{ data }">
 						<div class="alerts-cell">
 							<Tag
@@ -168,10 +188,19 @@ const recentEventRows = computed<EventRow[]>(() => {
 				:rows="5"
 				stripedRows
 				size="small"
+				tableStyle="table-layout: fixed"
 			>
-				<Column field="generated_at" header="Generated" sortable>
+				<Column
+					field="generated_at"
+					header="Generated"
+					sortable
+					headerClass="table-col-time"
+					bodyClass="table-col-time"
+				>
 					<template #body="{ data }">
-						{{ data.display_time ?? data.generated_at }}
+						<span class="timestamp-cell">
+							{{ data.display_time ?? data.generated_at }}
+						</span>
 					</template>
 				</Column>
 
@@ -210,11 +239,50 @@ const recentEventRows = computed<EventRow[]>(() => {
 }
 
 .alerts-cell {
-	min-width: 10rem;
+	max-width: 100%;
+	overflow: hidden;
+}
+
+:deep(.alerts-cell .p-tag) {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.timestamp-cell {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant: tabular-nums;
+}
+
+.reading-cell {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant: tabular-nums;
 }
 
 .alerts-empty {
 	display: inline-block;
 	min-width: 1ch;
+}
+
+:deep(.table-col-time) {
+	width: 9rem;
+}
+
+:deep(.table-col-reading) {
+	width: 7rem;
+}
+
+:deep(.table-col-alerts) {
+	width: 10rem;
 }
 </style>

@@ -156,10 +156,19 @@ onMounted(() => {
 				size="small"
 				sortField="timestamp"
 				:sortOrder="-1"
+				tableStyle="table-layout: fixed"
 			>
-				<Column field="timestamp" header="Time" sortable>
+				<Column
+					field="timestamp"
+					header="Time"
+					sortable
+					headerClass="table-col-time"
+					bodyClass="table-col-time"
+				>
 					<template #body="{ data }">
-						{{ data.display_time ?? data.timestamp }}
+						<span class="timestamp-cell">
+							{{ data.display_time ?? data.timestamp }}
+						</span>
 					</template>
 				</Column>
 
@@ -171,7 +180,16 @@ onMounted(() => {
 
 				<Column field="source_label" header="Source" />
 
-				<Column field="reading_label" header="Reading" />
+				<Column
+					field="reading_label"
+					header="Reading"
+					headerClass="table-col-reading"
+					bodyClass="table-col-reading"
+				>
+					<template #body="{ data }">
+						<span class="reading-cell">{{ data.reading_label }}</span>
+					</template>
+				</Column>
 
 				<Column header="State">
 					<template #body="{ data }">
@@ -182,7 +200,7 @@ onMounted(() => {
 					</template>
 				</Column>
 
-				<Column header="Alerts">
+				<Column header="Alerts" headerClass="table-col-alerts" bodyClass="table-col-alerts">
 					<template #body="{ data }">
 						<Tag
 							v-if="data.alerts.length"
@@ -203,10 +221,19 @@ onMounted(() => {
 				size="small"
 				sortField="generated_at"
 				:sortOrder="-1"
+				tableStyle="table-layout: fixed"
 			>
-				<Column field="generated_at" header="Generated" sortable>
+				<Column
+					field="generated_at"
+					header="Generated"
+					sortable
+					headerClass="table-col-time"
+					bodyClass="table-col-time"
+				>
 					<template #body="{ data }">
-						{{ data.display_time ?? data.generated_at }}
+						<span class="timestamp-cell">
+							{{ data.display_time ?? data.generated_at }}
+						</span>
 					</template>
 				</Column>
 
@@ -257,6 +284,36 @@ onMounted(() => {
 	margin-top: 0.35rem;
 	font-size: 0.85rem;
 	color: var(--text-color-secondary);
+}
+
+.timestamp-cell {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant: tabular-nums;
+}
+
+.reading-cell {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant: tabular-nums;
+}
+
+:deep(.table-col-time) {
+	width: 9rem;
+}
+
+:deep(.table-col-reading) {
+	width: 7rem;
+}
+
+:deep(.table-col-alerts) {
+	width: 10rem;
 }
 
 .snapshot-controls {

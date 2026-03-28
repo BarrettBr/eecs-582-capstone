@@ -482,7 +482,7 @@ function createDefaultValidationSpec(
 			{
 				field: "temperature",
 				op: ">",
-				value: 77,
+				value: 80,
 				label: "temperature_high",
 			},
 		],
