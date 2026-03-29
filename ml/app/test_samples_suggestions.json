@@ -1,0 +1,1974 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2026-02-24T12:00:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": false,
+    "temperature": 26.4,
+    "heater_power": 2.84,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 2,
+    "timestamp": "2026-02-24T12:01:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 105,
+    "fan_on": false,
+    "temperature": 16.7,
+    "heater_power": 2.15,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 3,
+    "timestamp": "2026-02-24T12:02:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": true,
+    "temperature": 20.7,
+    "heater_power": 1.18,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 4,
+    "timestamp": "2026-02-24T12:03:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 102,
+    "fan_on": false,
+    "temperature": 17.0,
+    "heater_power": 1.14,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 5,
+    "timestamp": "2026-02-24T12:04:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": false,
+    "temperature": 26.9,
+    "heater_power": 2.21,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 6,
+    "timestamp": "2026-02-24T12:05:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": true,
+    "temperature": 22.1,
+    "heater_power": 2.54,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 7,
+    "timestamp": "2026-02-24T12:06:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 34.7,
+    "heater_power": 2.33,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 8,
+    "timestamp": "2026-02-24T12:07:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 104,
+    "fan_on": false,
+    "temperature": 18.4,
+    "heater_power": 2.76,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 9,
+    "timestamp": "2026-02-24T12:08:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": false,
+    "temperature": 28.6,
+    "heater_power": 1.37,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 10,
+    "timestamp": "2026-02-24T12:09:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 33.3,
+    "heater_power": 2.74,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 11,
+    "timestamp": "2026-02-24T12:10:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": true,
+    "temperature": 29.7,
+    "heater_power": 2.32,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 12,
+    "timestamp": "2026-02-24T12:11:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": true,
+    "temperature": 24.7,
+    "heater_power": 1.18,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 13,
+    "timestamp": "2026-02-24T12:12:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 114,
+    "fan_on": true,
+    "temperature": 32.9,
+    "heater_power": 0.6,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 14,
+    "timestamp": "2026-02-24T12:13:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 30.0,
+    "heater_power": 1.74,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 15,
+    "timestamp": "2026-02-24T12:14:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 16.0,
+    "heater_power": 2.94,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 16,
+    "timestamp": "2026-02-24T12:15:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 22.5,
+    "heater_power": 2.76,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 17,
+    "timestamp": "2026-02-24T12:16:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": false,
+    "temperature": 26.3,
+    "heater_power": 2.86,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 18,
+    "timestamp": "2026-02-24T12:17:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 26.7,
+    "heater_power": 2.84,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 19,
+    "timestamp": "2026-02-24T12:18:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 19.9,
+    "heater_power": 0.38,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-02-24T12:19:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": false,
+    "temperature": 30.6,
+    "heater_power": 0.58,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 21,
+    "timestamp": "2026-02-24T12:20:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": true,
+    "temperature": 31.7,
+    "heater_power": 0.58,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 22,
+    "timestamp": "2026-02-24T12:21:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": false,
+    "temperature": 29.7,
+    "heater_power": 0.91,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 23,
+    "timestamp": "2026-02-24T12:22:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 31.1,
+    "heater_power": 1.33,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 24,
+    "timestamp": "2026-02-24T12:23:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": false,
+    "temperature": 28.5,
+    "heater_power": 0.33,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 25,
+    "timestamp": "2026-02-24T12:24:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 28.8,
+    "heater_power": 1.95,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 26,
+    "timestamp": "2026-02-24T12:25:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": false,
+    "temperature": 18.4,
+    "heater_power": 2.53,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 27,
+    "timestamp": "2026-02-24T12:26:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": false,
+    "temperature": 32.7,
+    "heater_power": 1.91,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 28,
+    "timestamp": "2026-02-24T12:27:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": true,
+    "temperature": 24.5,
+    "heater_power": 0.53,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 29,
+    "timestamp": "2026-02-24T12:28:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 30.4,
+    "heater_power": 2.91,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 30,
+    "timestamp": "2026-02-24T12:29:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": true,
+    "temperature": 31.0,
+    "heater_power": 1.01,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 31,
+    "timestamp": "2026-02-24T12:30:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": true,
+    "temperature": 22.9,
+    "heater_power": 1.84,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 32,
+    "timestamp": "2026-02-24T12:31:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": false,
+    "temperature": 17.3,
+    "heater_power": 1.39,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 33,
+    "timestamp": "2026-02-24T12:32:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": true,
+    "temperature": 19.6,
+    "heater_power": 1.42,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 34,
+    "timestamp": "2026-02-24T12:33:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 19.8,
+    "heater_power": 2.59,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 35,
+    "timestamp": "2026-02-24T12:34:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": true,
+    "temperature": 30.7,
+    "heater_power": 2.1,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 36,
+    "timestamp": "2026-02-24T12:35:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": true,
+    "temperature": 17.0,
+    "heater_power": 1.25,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_off",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 37,
+    "timestamp": "2026-02-24T12:36:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": true,
+    "temperature": 31.1,
+    "heater_power": 2.82,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 38,
+    "timestamp": "2026-02-24T12:37:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": false,
+    "temperature": 15.5,
+    "heater_power": 0.22,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 39,
+    "timestamp": "2026-02-24T12:38:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": false,
+    "temperature": 34.8,
+    "heater_power": 1.48,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 40,
+    "timestamp": "2026-02-24T12:39:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": false,
+    "temperature": 20.1,
+    "heater_power": 2.22,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 41,
+    "timestamp": "2026-02-24T12:40:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": false,
+    "temperature": 24.1,
+    "heater_power": 2.87,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 42,
+    "timestamp": "2026-02-24T12:41:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": true,
+    "temperature": 15.8,
+    "heater_power": 1.75,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_off",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 43,
+    "timestamp": "2026-02-24T12:42:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": true,
+    "temperature": 19.8,
+    "heater_power": 2.4,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 44,
+    "timestamp": "2026-02-24T12:43:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": false,
+    "temperature": 30.0,
+    "heater_power": 0.3,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 45,
+    "timestamp": "2026-02-24T12:44:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 33.7,
+    "heater_power": 2.5,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 46,
+    "timestamp": "2026-02-24T12:45:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 22.0,
+    "heater_power": 0.66,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 47,
+    "timestamp": "2026-02-24T12:46:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": false,
+    "temperature": 15.8,
+    "heater_power": 0.83,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 48,
+    "timestamp": "2026-02-24T12:47:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": false,
+    "temperature": 15.8,
+    "heater_power": 0.76,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 49,
+    "timestamp": "2026-02-24T12:48:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 105,
+    "fan_on": true,
+    "temperature": 33.3,
+    "heater_power": 0.1,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 50,
+    "timestamp": "2026-02-24T12:49:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 25.1,
+    "heater_power": 2.15,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 51,
+    "timestamp": "2026-02-24T12:50:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": true,
+    "temperature": 33.2,
+    "heater_power": 1.34,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 52,
+    "timestamp": "2026-02-24T12:51:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": false,
+    "temperature": 25.4,
+    "heater_power": 2.68,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 53,
+    "timestamp": "2026-02-24T12:52:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": false,
+    "temperature": 32.4,
+    "heater_power": 2.29,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 54,
+    "timestamp": "2026-02-24T12:53:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 23.4,
+    "heater_power": 2.15,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 55,
+    "timestamp": "2026-02-24T12:54:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 32.1,
+    "heater_power": 0.56,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 56,
+    "timestamp": "2026-02-24T12:55:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 29.1,
+    "heater_power": 0.42,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 57,
+    "timestamp": "2026-02-24T12:56:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": true,
+    "temperature": 21.4,
+    "heater_power": 2.18,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 58,
+    "timestamp": "2026-02-24T12:57:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 34.5,
+    "heater_power": 1.63,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 59,
+    "timestamp": "2026-02-24T12:58:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 26.3,
+    "heater_power": 2.31,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 60,
+    "timestamp": "2026-02-24T12:59:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 22.5,
+    "heater_power": 2.9,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 61,
+    "timestamp": "2026-02-24T13:00:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 102,
+    "fan_on": true,
+    "temperature": 26.6,
+    "heater_power": 2.47,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 62,
+    "timestamp": "2026-02-24T13:01:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 25.1,
+    "heater_power": 1.36,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 63,
+    "timestamp": "2026-02-24T13:02:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 105,
+    "fan_on": false,
+    "temperature": 29.4,
+    "heater_power": 2.05,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 64,
+    "timestamp": "2026-02-24T13:03:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 31.9,
+    "heater_power": 1.74,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 65,
+    "timestamp": "2026-02-24T13:04:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": false,
+    "temperature": 21.2,
+    "heater_power": 2.85,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 66,
+    "timestamp": "2026-02-24T13:05:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 114,
+    "fan_on": false,
+    "temperature": 34.9,
+    "heater_power": 2.75,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 67,
+    "timestamp": "2026-02-24T13:06:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": false,
+    "temperature": 32.1,
+    "heater_power": 1.53,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 68,
+    "timestamp": "2026-02-24T13:07:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": false,
+    "temperature": 32.4,
+    "heater_power": 0.73,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 69,
+    "timestamp": "2026-02-24T13:08:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": false,
+    "temperature": 25.9,
+    "heater_power": 2.06,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 70,
+    "timestamp": "2026-02-24T13:09:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": false,
+    "temperature": 19.2,
+    "heater_power": 2.12,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 71,
+    "timestamp": "2026-02-24T13:10:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 104,
+    "fan_on": true,
+    "temperature": 20.3,
+    "heater_power": 2.02,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 72,
+    "timestamp": "2026-02-24T13:11:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": false,
+    "temperature": 18.3,
+    "heater_power": 2.71,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 73,
+    "timestamp": "2026-02-24T13:12:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": false,
+    "temperature": 28.4,
+    "heater_power": 1.62,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 74,
+    "timestamp": "2026-02-24T13:13:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": false,
+    "temperature": 24.3,
+    "heater_power": 0.31,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 75,
+    "timestamp": "2026-02-24T13:14:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": true,
+    "temperature": 24.6,
+    "heater_power": 0.26,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 76,
+    "timestamp": "2026-02-24T13:15:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": true,
+    "temperature": 31.6,
+    "heater_power": 0.12,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 77,
+    "timestamp": "2026-02-24T13:16:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 24.3,
+    "heater_power": 2.55,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 78,
+    "timestamp": "2026-02-24T13:17:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": true,
+    "temperature": 19.4,
+    "heater_power": 0.05,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 79,
+    "timestamp": "2026-02-24T13:18:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": true,
+    "temperature": 28.9,
+    "heater_power": 0.03,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 80,
+    "timestamp": "2026-02-24T13:19:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": true,
+    "temperature": 31.4,
+    "heater_power": 1.57,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 81,
+    "timestamp": "2026-02-24T13:20:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 31.1,
+    "heater_power": 2.17,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 82,
+    "timestamp": "2026-02-24T13:21:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": true,
+    "temperature": 33.7,
+    "heater_power": 1.17,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 83,
+    "timestamp": "2026-02-24T13:22:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": false,
+    "temperature": 17.3,
+    "heater_power": 1.18,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 84,
+    "timestamp": "2026-02-24T13:23:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": true,
+    "temperature": 32.9,
+    "heater_power": 0.88,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 85,
+    "timestamp": "2026-02-24T13:24:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": true,
+    "temperature": 17.8,
+    "heater_power": 2.13,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_off",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 86,
+    "timestamp": "2026-02-24T13:25:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": false,
+    "temperature": 18.1,
+    "heater_power": 1.11,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 87,
+    "timestamp": "2026-02-24T13:26:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": false,
+    "temperature": 27.6,
+    "heater_power": 1.34,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 88,
+    "timestamp": "2026-02-24T13:27:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 29.8,
+    "heater_power": 1.51,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 89,
+    "timestamp": "2026-02-24T13:28:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": false,
+    "temperature": 22.3,
+    "heater_power": 1.48,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 90,
+    "timestamp": "2026-02-24T13:29:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 23.9,
+    "heater_power": 0.74,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 91,
+    "timestamp": "2026-02-24T13:30:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 28.3,
+    "heater_power": 2.06,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 92,
+    "timestamp": "2026-02-24T13:31:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": true,
+    "temperature": 19.3,
+    "heater_power": 1.53,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 93,
+    "timestamp": "2026-02-24T13:32:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": true,
+    "temperature": 29.4,
+    "heater_power": 2.66,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 94,
+    "timestamp": "2026-02-24T13:33:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": true,
+    "temperature": 21.5,
+    "heater_power": 1.48,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 95,
+    "timestamp": "2026-02-24T13:34:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": true,
+    "temperature": 29.4,
+    "heater_power": 0.89,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 96,
+    "timestamp": "2026-02-24T13:35:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 119,
+    "fan_on": false,
+    "temperature": 25.6,
+    "heater_power": 1.86,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 97,
+    "timestamp": "2026-02-24T13:36:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": true,
+    "temperature": 30.6,
+    "heater_power": 1.02,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 98,
+    "timestamp": "2026-02-24T13:37:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 114,
+    "fan_on": true,
+    "temperature": 24.4,
+    "heater_power": 1.11,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 99,
+    "timestamp": "2026-02-24T13:38:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 102,
+    "fan_on": true,
+    "temperature": 21.2,
+    "heater_power": 0.83,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 100,
+    "timestamp": "2026-02-24T13:39:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 16.4,
+    "heater_power": 1.85,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_off",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 101,
+    "timestamp": "2026-02-24T13:40:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": false,
+    "temperature": 22.7,
+    "heater_power": 2.23,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 102,
+    "timestamp": "2026-02-24T13:41:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 101,
+    "fan_on": false,
+    "temperature": 32.2,
+    "heater_power": 0.03,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on"
+    ]
+  },
+  {
+    "id": 103,
+    "timestamp": "2026-02-24T13:42:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": true,
+    "temperature": 32.6,
+    "heater_power": 1.11,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 104,
+    "timestamp": "2026-02-24T13:43:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 104,
+    "fan_on": true,
+    "temperature": 32.8,
+    "heater_power": 1.52,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 105,
+    "timestamp": "2026-02-24T13:44:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": false,
+    "temperature": 30.5,
+    "heater_power": 1.56,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 106,
+    "timestamp": "2026-02-24T13:45:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": false,
+    "temperature": 28.0,
+    "heater_power": 1.76,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "decrease_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 107,
+    "timestamp": "2026-02-24T13:46:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": false,
+    "temperature": 22.6,
+    "heater_power": 1.27,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 108,
+    "timestamp": "2026-02-24T13:47:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": true,
+    "temperature": 20.5,
+    "heater_power": 1.49,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 109,
+    "timestamp": "2026-02-24T13:48:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": false,
+    "temperature": 18.2,
+    "heater_power": 0.71,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 110,
+    "timestamp": "2026-02-24T13:49:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 105,
+    "fan_on": true,
+    "temperature": 19.9,
+    "heater_power": 1.41,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 111,
+    "timestamp": "2026-02-24T13:50:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 34.6,
+    "heater_power": 1.37,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": [
+      "decrease_heater_power"
+    ]
+  },
+  {
+    "id": 112,
+    "timestamp": "2026-02-24T13:51:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 31.4,
+    "heater_power": 0.53,
+    "anomalies": [
+      "overheat"
+    ],
+    "action_class": "critical_overheat",
+    "priority": "critical",
+    "recommended_actions": ["decrease_heater_power"]
+  },
+  {
+    "id": 113,
+    "timestamp": "2026-02-24T13:52:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": true,
+    "temperature": 20.8,
+    "heater_power": 2.89,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 114,
+    "timestamp": "2026-02-24T13:53:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": false,
+    "temperature": 21.4,
+    "heater_power": 0.77,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 115,
+    "timestamp": "2026-02-24T13:54:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 120,
+    "fan_on": true,
+    "temperature": 18.7,
+    "heater_power": 2.06,
+    "anomalies": [],
+    "action_class": "no_action",
+    "priority": "low",
+    "recommended_actions": []
+  },
+  {
+    "id": 116,
+    "timestamp": "2026-02-24T13:55:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 103,
+    "fan_on": true,
+    "temperature": 26.5,
+    "heater_power": 1.8,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 117,
+    "timestamp": "2026-02-24T13:56:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 104,
+    "fan_on": true,
+    "temperature": 26.2,
+    "heater_power": 0.9,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 118,
+    "timestamp": "2026-02-24T13:57:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 106,
+    "fan_on": true,
+    "temperature": 26.8,
+    "heater_power": 1.1,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 119,
+    "timestamp": "2026-02-24T13:58:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 107,
+    "fan_on": true,
+    "temperature": 26.3,
+    "heater_power": 0.7,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 120,
+    "timestamp": "2026-02-24T13:59:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 108,
+    "fan_on": true,
+    "temperature": 26.7,
+    "heater_power": 1.05,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 121,
+    "timestamp": "2026-02-24T14:00:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 109,
+    "fan_on": false,
+    "temperature": 26.4,
+    "heater_power": 0.8,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 122,
+    "timestamp": "2026-02-24T14:01:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 110,
+    "fan_on": false,
+    "temperature": 26.6,
+    "heater_power": 1.0,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 123,
+    "timestamp": "2026-02-24T14:02:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 111,
+    "fan_on": false,
+    "temperature": 26.1,
+    "heater_power": 0.6,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 124,
+    "timestamp": "2026-02-24T14:03:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 112,
+    "fan_on": false,
+    "temperature": 26.9,
+    "heater_power": 0.9,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 125,
+    "timestamp": "2026-02-24T14:04:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 113,
+    "fan_on": false,
+    "temperature": 26.5,
+    "heater_power": 0.7,
+    "anomalies": [],
+    "action_class": "monitor_elevated_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "turn_fan_on",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 126,
+    "timestamp": "2026-02-24T14:05:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 114,
+    "fan_on": true,
+    "temperature": 17.8,
+    "heater_power": 0.3,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 127,
+    "timestamp": "2026-02-24T14:06:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 115,
+    "fan_on": true,
+    "temperature": 17.5,
+    "heater_power": 0.4,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 128,
+    "timestamp": "2026-02-24T14:07:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 116,
+    "fan_on": false,
+    "temperature": 16.9,
+    "heater_power": 0.2,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 129,
+    "timestamp": "2026-02-24T14:08:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 117,
+    "fan_on": true,
+    "temperature": 17.2,
+    "heater_power": 0.35,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  },
+  {
+    "id": 130,
+    "timestamp": "2026-02-24T14:09:00Z",
+    "sensor_type": "temperature",
+    "sensor_number": 118,
+    "fan_on": false,
+    "temperature": 18.0,
+    "heater_power": 0.25,
+    "anomalies": [],
+    "action_class": "monitor_low_temp",
+    "priority": "medium",
+    "recommended_actions": [
+      "increase_heater_power",
+      "monitor_temperature"
+    ]
+  }
+]
