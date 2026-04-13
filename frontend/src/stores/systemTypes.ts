@@ -112,3 +112,53 @@ export interface SubscriptionsPrunedPayload {
 	current_services?: string[];
 	reason?: string;
 }
+
+export type ExportWindow = "hour" | "day" | "week";
+export type ExportKind = "temp" | "valve";
+
+export interface HistorySelection {
+	endpoint: "history" | "report";
+	kind: ExportKind;
+	window: ExportWindow;
+	table: string;
+	group_by: string;
+	range: string;
+}
+
+export interface HistoryEvent {
+	id: number;
+	timestamp: number;
+	sensor_type: string;
+	source_kind: ExportKind;
+	source_id: number;
+	fan_on?: boolean;
+	temperature?: number;
+	heater_power?: number;
+	is_open?: boolean;
+	flow_rate?: number;
+	alert_count: number;
+	anomalies: string[];
+}
+
+export interface HistoryResponse {
+	selection: HistorySelection;
+	items: HistoryEvent[];
+}
+
+export interface ReportSummary {
+	avg_temp: number;
+	min_temp: number;
+	max_temp: number;
+	avg_valve_open_rate: number;
+	min_valve_open_rate: number;
+	max_valve_open_rate: number;
+	total_alerts: number;
+	temp_anomalies: number;
+	valve_anomalies: number;
+	valve_open_duration_seconds: number;
+}
+
+export interface ReportResponse {
+	selection: HistorySelection;
+	summary: ReportSummary;
+}
