@@ -69,18 +69,21 @@ def build_temperature_baseline_model(df, n_clusters=3, outlier_percentile=95):
     if df.empty:
         return None
 
+    min_features = 5
+    min_unique_features = 3
+
     features = prepare_temperature_features(df)
-    if len(features) < 5:
+    if len(features) < min_features:
         return None
 
     unique_count = len(features.drop_duplicates())
-    if unique_count < 3:
+    if unique_count < min_unique_features:
         return None
 
     cluster_count = min(max(1, len(features)), n_clusters, unique_count)
     scaler = StandardScaler()
     scaled_features = scaler.fit_transform(features)
-    kmeans = KMeans(n_clusters=cluster_count, random_state=42)
+    kmeans = KMeans(n_clusters=cluster_count, init="k-means++", random_state=42)
     kmeans.fit(scaled_features)
     distances = kmeans.transform(scaled_features).min(axis=1)
     threshold = float(np.percentile(distances, outlier_percentile))

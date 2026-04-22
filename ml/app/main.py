@@ -15,6 +15,7 @@ Known faults: Small sample sets can reduce cluster count to avoid fit failures
 import argparse
 import errno
 import os
+import sys
 from http.server import ThreadingHTTPServer
 import logging
 from utilities.checkpointing import (
@@ -26,6 +27,13 @@ from utilities.checkpointing import (
 from utilities.mlRequestHandler import MLRequestHandler
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    force=True,
+)
+
 DEFAULT_SERVER_HOST = "127.0.0.1"
 DEFAULT_PORT_NUM = 8000
 
@@ -178,6 +186,7 @@ def main():
     # if we are asked to do warmup
     initialize_checkpointing(args)
 
+    logger.info("starting server")
     # Spins up the test server
     if args.serve:
         serve(

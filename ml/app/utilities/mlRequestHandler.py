@@ -51,15 +51,17 @@ def infer_response_severity(score, anomaly_count, sample_count):
     if score is None:
         if ratio >= 0.5:
             return "high"
-        if ratio >= 0.2:
+        elif ratio >= 0.2:
             return "medium"
-        return "low"
-
-    if score >= 3.0 or ratio >= 0.5:
-        return "high"
-    if score >= 1.5 or ratio >= 0.2:
-        return "medium"
-    return "low"
+        else:
+            return "low"
+    else:
+        if score >= 3.0 or ratio >= 0.5:
+            return "high"
+        elif score >= 1.5 or ratio >= 0.2:
+            return "medium"
+        else:
+            return "low"
 
 
 def infer_confidence(score, has_anomaly):
@@ -73,6 +75,7 @@ def infer_confidence(score, has_anomaly):
     """
     if score is None:
         return 0.85 if has_anomaly else 0.35
+    # normalize score between 0 and 1
     return float(max(0.0, min(1.0, score / 3.0)))
 
 
@@ -158,6 +161,7 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
             DataFrame with detected_anomaly and anomaly_score columns
     """
     if df.empty:
+        logger.info("received empty dataframe")
         return df.copy()
 
     features = prepare_temperature_features(df)
@@ -165,6 +169,7 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
     # Very small or low-variety batches are not meaningful for clustering and
     # tend to mark nearly every batch as anomalous. Treat them as "no anomaly".
     if len(features) < 5 and model_state is None:
+        logger.info("small batch, treated as no anomaly")
         df = df.copy()
         df["detected_anomaly"] = 0
         df["anomaly_score"] = 0.0
@@ -173,6 +178,7 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
 
     unique_count = len(features.drop_duplicates())
     if unique_count < 3 and model_state is None:
+        logger.info("small batch, treated as no anomaly")
         df = df.copy()
         df["detected_anomaly"] = 0
         df["anomaly_score"] = 0.0
@@ -181,13 +187,14 @@ def kmeans_anomaly_detection(df, model_state=None, n_clusters=3, outlier_percent
 
     #  If the model isn't ready then
     if not temperature_model_is_ready(model_state):
-        logger.info("temperature model isn't ready")
+        logger.info("building temperature model")
         model_state = build_temperature_baseline_model(
             df,
             n_clusters=n_clusters,
             outlier_percentile=outlier_percentile,
         )
         if model_state is None:
+            logger.info("No model, treated as no anomaly")
             df = df.copy()
             df["detected_anomaly"] = 0
             df["anomaly_score"] = 0.0
@@ -377,7 +384,7 @@ def save_temperature_visualization(result_df, output_path, title=None):
 
     features = prepare_temperature_features(result_df)
     if len(features) < 2:
-        logger.error("Less than two samples")
+        logger.error("Less than two samples for visualization")
         raise ValueError(
             "at least two temperature samples are required to visualize clusters"
         )
@@ -481,6 +488,7 @@ def analyze_valve(df):
     required = {"is_open", "flow_rate"}
     missing = sorted(required.difference(df.columns))
     if missing:
+        logger.warning("Valve data is missing a field")
         raise ValueError(f'valve samples missing fields: {", ".join(missing)}')
     result = valve_anomaly_detection(df)
     return build_anomaly_response(result, "valve", "rule_engine")
@@ -510,14 +518,14 @@ def analyze_samples(data, n_clusters=3, outlier_percentile=95):
 
 class MLRequestHandler(BaseHTTPRequestHandler):
     """
-    Simple HTTP handler that exposes the anomaly detection over POST.
+    Simple HTTP handler that exposes the anomaly detection over HTTP.
     """
 
     clusters = 3
     percentile = 95
 
-    # Handles incoming POST requests
     def do_POST(self):
+        """ Handles incoming POST requests from the ingest side"""
         # Accept only / and /analyze routes
         if self.path not in ("/", "/analyze"):
             logger.warning("Path not found: %s", self.path)
@@ -564,4 +572,3 @@ class MLRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-
