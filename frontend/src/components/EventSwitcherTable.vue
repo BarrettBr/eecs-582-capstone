@@ -30,6 +30,8 @@ interface ValveEvent {
 
 interface MLAlert {
 	service_name?: string;
+	event_type?: string;
+	model?: string;
 	generated_at: string;
 	display_time?: string;
 	has_anomaly: boolean;
@@ -227,13 +229,19 @@ const recentEventRows = computed<EventRow[]>(() => {
 					</template>
 				</Column>
 
-				<Column field="service_name" header="Service" sortable>
-					<template #body="{ data }">
-						{{ displayServiceName(data.service_name) }}
-					</template>
-				</Column>
+			<Column field="service_name" header="Service" sortable>
+				<template #body="{ data }">
+					{{ displayServiceName(data.service_name) }}
+				</template>
+			</Column>
 
-				<Column header="Anomaly">
+			<Column header="Model">
+				<template #body="{ data }">
+					{{ data.model || "KMeans" }}
+				</template>
+			</Column>
+
+			<Column header="Anomaly">
 					<template #body="{ data }">
 						<Tag
 							:value="data.has_anomaly ? 'YES' : 'NO'"

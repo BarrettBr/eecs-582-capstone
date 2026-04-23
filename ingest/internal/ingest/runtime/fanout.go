@@ -251,18 +251,36 @@ func (p *Pipeline) deliverMLTypeBatch(ctx context.Context, serviceName, eventTyp
 		return fmt.Errorf("ML response json parse (%s): %w", eventType, err)
 	}
 
-	normalized := normalizeMLAnomalyPayload(serviceName, eventType, parsed, trimmed)
-	normalizedBody, err := json.Marshal(normalized)
-	if err != nil {
-		return fmt.Errorf("ML normalized response encode (%s): %w", eventType, err)
-	}
-	p.mlLastResponse = append(p.mlLastResponse[:0], normalizedBody...)
-	if !normalized.HasAnomaly {
+	publishPayload := func(item any, raw []byte) error {
+		normalized := normalizeMLAnomalyPayload(serviceName, eventType, item, raw)
+		normalizedBody, err := json.Marshal(normalized)
+		if err != nil {
+			return fmt.Errorf("ML normalized response encode (%s): %w", eventType, err)
+		}
+		p.mlLastResponse = append(p.mlLastResponse[:0], normalizedBody...)
+		if p.streamer != nil {
+			p.streamer.PublishScopedMLResult(eventType, serviceName, normalizedBody)
+		}
 		return nil
 	}
-	if p.streamer != nil {
-		p.streamer.PublishScopedMLResult(eventType, serviceName, normalizedBody)
+
+	switch items := parsed.(type) {
+	case []any:
+		for _, item := range items {
+			rawItem, err := json.Marshal(item)
+			if err != nil {
+				return fmt.Errorf("ML item encode (%s): %w", eventType, err)
+			}
+			if err := publishPayload(item, rawItem); err != nil {
+				return err
+			}
+		}
+	default:
+		if err := publishPayload(parsed, trimmed); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 

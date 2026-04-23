@@ -40,6 +40,7 @@ type MLAnomalyPayload struct {
 	Schema            string          `json:"schema"`
 	ServiceName       string          `json:"service_name,omitempty"`
 	EventType         string          `json:"event_type"`
+	Model             string          `json:"model,omitempty"`
 	GeneratedAt       string          `json:"generated_at"`
 	GeneratedAtMs     int64           `json:"generated_at_ms"`
 	HasAnomaly        bool            `json:"has_anomaly"`
@@ -76,7 +77,7 @@ func normalizeMLAnomalyPayload(serviceName, eventType string, parsed any, raw []
 	payload.Severity = extractSeverity(parsed)
 	payload.ProbableCause = extractStringField(parsed, "probable_cause", "cause", "summary")
 	payload.RecommendedAction = extractStringField(parsed, "recommended_action", "action", "recommendation")
-
+	payload.Model = extractStringField(parsed, "model", "model_name", "type")
 	payload.Labels = extractLabels(parsed)
 	if len(payload.Labels) > 0 {
 		payload.HasAnomaly = true

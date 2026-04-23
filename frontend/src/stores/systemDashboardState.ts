@@ -59,7 +59,10 @@ export function createDashboardState(
 		const ruleAlerts = recentEvents.value.reduce((count, event) => {
 			return count + (event.anomalies?.length ?? 0);
 		}, 0);
-		metrics.value.activeAlerts = ruleAlerts + mlAlerts.value.length;
+		const mlAlertCount = mlAlerts.value.reduce((count, alert) => {
+			return count + (alert.has_anomaly ? 1 : 0);
+		}, 0);
+		metrics.value.activeAlerts = ruleAlerts + mlAlertCount;
 	}
 
 	function prependNewestFirst<T>(

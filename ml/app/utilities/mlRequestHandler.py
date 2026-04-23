@@ -30,8 +30,157 @@ from utilities.checkpointing import (
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import LabelEncoder
 
 logger = logging.getLogger(__name__)
+
+RF_TRAINING_DATA_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "test_samples_suggestions.json")
+)
+_rf_model = None
+_rf_label_encoder = None
+_rf_model_ready = False
+
+
+def _load_rf_training_data(path):
+    with open(path, "r", encoding="utf-8") as fp:
+        data = json.load(fp)
+    return pd.DataFrame(data)
+
+
+def _prepare_rf_features_and_target(df):
+    features = df.loc[:, ["fan_on", "temperature", "heater_power"]].copy()
+    features["fan_on"] = features["fan_on"].astype(int)
+
+    missing = [field for field in ["action_class", "priority", "recommended_actions"] if field not in df]
+    if missing:
+        raise ValueError(f"RF training data missing fields: {', '.join(missing)}")
+
+    action_class = df.loc[:, "action_class"].astype(str)
+    priority = df.loc[:, "priority"].astype(str)
+    recommended_actions = df.loc[:, "recommended_actions"].apply(
+        lambda x: ",".join(x) if isinstance(x, list) and len(x) > 0 else "none"
+    )
+    target = action_class + "|" + priority + "|" + recommended_actions
+
+    le = LabelEncoder()
+    target_encoded = le.fit_transform(target)
+    return features, target_encoded, le
+
+
+def _initialize_rf_model():
+    global _rf_model, _rf_label_encoder, _rf_model_ready
+    if _rf_model_ready:
+        return
+
+    try:
+        df = _load_rf_training_data(RF_TRAINING_DATA_PATH)
+        X, y, le = _prepare_rf_features_and_target(df)
+        if len(X) < 10 or len(set(y)) < 2:
+            raise ValueError("RF training data is too small or has too few classes")
+
+        param_grid = {
+            "n_estimators": [10, 50],
+            "max_depth": [3, 5, None],
+            "min_samples_split": [2, 5],
+        }
+        grid = GridSearchCV(
+            RandomForestClassifier(random_state=42),
+            param_grid,
+            cv=3,
+            scoring="accuracy",
+            n_jobs=1,
+        )
+        grid.fit(X, y)
+        _rf_model = grid.best_estimator_
+        _rf_label_encoder = le
+        _rf_model_ready = True
+        logger.info("Random Forest model initialized with params: %s", grid.best_params_)
+    except Exception as err:
+        logger.warning("Random Forest initialization failed: %s", err)
+        _rf_model = None
+        _rf_label_encoder = None
+        _rf_model_ready = False
+
+
+def _rf_response_for_temperature(df):
+    if not _rf_model_ready:
+        _initialize_rf_model()
+    if not _rf_model_ready or _rf_model is None or _rf_label_encoder is None:
+        return None
+
+    if df.empty:
+        return None
+
+    missing = sorted({"fan_on", "temperature", "heater_power"}.difference(df.columns))
+    if missing:
+        return None
+
+    features = df.loc[:, ["fan_on", "temperature", "heater_power"]].copy()
+    features["fan_on"] = features["fan_on"].astype(int)
+
+    try:
+        proba = _rf_model.predict_proba(features)
+        preds = _rf_model.predict(features)
+    except Exception as err:
+        logger.warning("Random Forest prediction failed: %s", err)
+        return None
+
+    pred_labels = _rf_label_encoder.inverse_transform(preds)
+    scores = np.max(proba, axis=1).astype(float)
+    most_likely_label = pred_labels[0] if len(pred_labels) > 0 else ""
+    most_likely_score = float(scores[0]) if len(scores) > 0 else 0.0
+
+    if "|" in most_likely_label:
+        parts = most_likely_label.split("|", 2)
+        action_class = parts[0] if len(parts) > 0 else ""
+        priority = parts[1] if len(parts) > 1 else "low"
+        recommended_actions = parts[2] if len(parts) > 2 else ""
+    else:
+        action_class = most_likely_label
+        priority = "low"
+        recommended_actions = ""
+
+    severity_map = {
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+    }
+    severity = severity_map.get(priority.lower(), "low")
+    has_anomaly = action_class != "no_action" or severity in {"high", "medium"}
+    probable_cause = (
+        f"Random forest predicted {action_class} with priority {priority}."
+        if action_class
+        else "Random forest did not identify a clear action."
+    )
+    recommended_action = (
+        recommended_actions.replace(",", ", ") if recommended_actions else "Review predicted action class."
+    )
+
+    return {
+        "model": "random_forest",
+        "event_type": "temperature",
+        "has_anomaly": has_anomaly,
+        "severity": severity,
+        "confidence": float(np.mean(scores)) if len(scores) > 0 else 0.0,
+        "probable_cause": probable_cause,
+        "recommended_action": recommended_action,
+        "labels": sorted(set(pred_labels.tolist())),
+        "score": float(np.mean(scores)) if len(scores) > 0 else 0.0,
+        "sample_count": int(len(features)),
+        "anomaly_count": int(np.sum(pred_labels != pred_labels[0])),
+        "anomalies": [
+            {
+                "index": int(i),
+                "label": pred_labels[i],
+                "score": float(scores[i]),
+                "is_anomaly": pred_labels[i] != pred_labels[0],
+            }
+            for i in range(len(pred_labels))
+        ],
+    }
 
 
 def infer_response_severity(score, anomaly_count, sample_count):
@@ -333,13 +482,13 @@ def build_anomaly_response(result_df, event_type, model):
 def analyze_temperature_batch(df, n_clusters=3, outlier_percentile=95):
     """
     Run temperature anomaly detection and return both the detailed frame and
-    the stable API response.
+    the stable API responses for KMeans and Random Forest.
     Args:
             df: DataFrame of temperature samples.
             n_clusters: Number of clusters for KMeans.
             outlier_percentile: Outlier percentile threshold.
     Returns:
-            Tuple of (result_df, response_dict, model_state).
+            Tuple of (kmeans_result_df, kmeans_response_dict, model_state, rf_response_dict).
     """
     required = {"fan_on", "temperature", "heater_power"}
     missing = sorted(required.difference(df.columns))
@@ -354,7 +503,7 @@ def analyze_temperature_batch(df, n_clusters=3, outlier_percentile=95):
         )
         model_state = checkpoint_manager.models.get("temperature_kmeans")
 
-    result = kmeans_anomaly_detection(
+    kmeans_result = kmeans_anomaly_detection(
         df,
         model_state=model_state,
         n_clusters=n_clusters,
@@ -364,8 +513,9 @@ def analyze_temperature_batch(df, n_clusters=3, outlier_percentile=95):
     refresh_temperature_baseline_model(
         n_clusters=n_clusters, outlier_percentile=outlier_percentile
     )
-    response = build_anomaly_response(result, "temperature", "kmeans")
-    return result, response, model_state
+    kmeans_response = build_anomaly_response(kmeans_result, "temperature", "kmeans")
+    rf_response = _rf_response_for_temperature(df)
+    return kmeans_result, kmeans_response, model_state, rf_response
 
 
 def save_temperature_visualization(result_df, output_path, title=None):
@@ -467,14 +617,17 @@ def analyze_temperature(df, n_clusters=3, outlier_percentile=95):
             n_clusters: Number of clusters for KMeans.
             outlier_percentile: Outlier percentile threshold.
     Returns:
-            Stable anomaly response dictionary.
+            List of stable anomaly response dictionaries for each temperature model.
     """
-    _, response, _ = analyze_temperature_batch(
+    _, kmeans_response, _, rf_response = analyze_temperature_batch(
         df,
         n_clusters=n_clusters,
         outlier_percentile=outlier_percentile,
     )
-    return response
+    responses = [kmeans_response]
+    if rf_response is not None:
+        responses.append(rf_response)
+    return responses
 
 
 def analyze_valve(df):
@@ -502,7 +655,7 @@ def analyze_samples(data, n_clusters=3, outlier_percentile=95):
             n_clusters: Number of clusters for KMeans.
             outlier_percentile: Outlier percentile threshold.
     Returns:
-            Stable anomaly response dictionary.
+            Stable anomaly response dictionary or list of response dictionaries.
     """
     event_type, df = dataframe_from_request(data)
     if event_type == "temperature":

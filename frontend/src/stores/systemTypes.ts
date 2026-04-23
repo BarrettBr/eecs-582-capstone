@@ -54,6 +54,7 @@ export interface MLAnomalyPayload {
 	schema: string;
 	service_name?: string;
 	event_type: string;
+	model?: string;
 	generated_at: string;
 	generated_at_ms?: number;
 	display_time?: string;
