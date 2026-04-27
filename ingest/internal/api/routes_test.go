@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/database"
 	ingestruntime "github.com/BarrettBr/eecs-582-capstone/internal/ingest/runtime"
@@ -17,6 +19,7 @@ type muxRegistrar struct {
 }
 
 type stubStatusProvider struct{}
+type machineStatusProvider struct{}
 
 func (m muxRegistrar) RegisterHTTPHandler(pattern string, handler http.HandlerFunc) {
 	m.mux.HandleFunc(pattern, handler)
@@ -27,6 +30,20 @@ func (stubStatusProvider) StatusSnapshot() ingestruntime.SystemStatusSnapshot {
 		PressureState:       ingestruntime.PressureHigh,
 		SharedUnitsUsed:     2,
 		SharedUnitsCapacity: 4,
+	}
+}
+
+func (machineStatusProvider) StatusSnapshot() ingestruntime.SystemStatusSnapshot {
+	return ingestruntime.SystemStatusSnapshot{
+		Services: []ingestruntime.ServiceStatus{
+			{
+				Name:      "temp_dev",
+				EventType: "temperature",
+				Machines: []ingestruntime.MachineStatus{
+					{ID: "m1", ServiceName: "temp_dev"},
+				},
+			},
+		},
 	}
 }
 
@@ -147,6 +164,44 @@ func TestRegisterRoutesAddsIngestionMetricsEndpoint(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutesMachineHistoryEndpoint(t *testing.T) {
+	mux := http.NewServeMux()
+	queries := openAPITestQueries(t)
+	nowUnix := time.Now().UTC().Unix()
+	if _, err := queries.InsertTempSample(context.Background(), database.InsertTempSampleParams{
+		ServiceName:  "temp_dev",
+		MachineID:    "m1",
+		Timestamp:    nowUnix,
+		SensorType:   "temperature_control_system",
+		SensorNumber: 1,
+		FanOn:        false,
+		Temperature:  72.4,
+		HeaterPower:  0,
+	}); err != nil {
+		t.Fatalf("InsertTempSample() error = %v", err)
+	}
+
+	registration := RegisterRoutes(muxRegistrar{mux: mux}, Config{
+		BasePath: "/api/v1",
+		Queries:  queries,
+		Status:   machineStatusProvider{},
+	})
+
+	if registration.MachineHistoryPath != "/api/v1/machineHistory/{machineId}" {
+		t.Fatalf("registration.MachineHistoryPath = %q, want %q", registration.MachineHistoryPath, "/api/v1/machineHistory/{machineId}")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/machineHistory/m1?service_name=temp_dev&window=hour", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "\"machine_id\":\"m1\"") {
+		t.Fatalf("body = %q, want machine id in payload", rec.Body.String())
+	}
+}
+
 func openAPITestQueries(t *testing.T) *database.Queries {
 	t.Helper()
 
@@ -161,6 +216,8 @@ func openAPITestQueries(t *testing.T) *database.Queries {
 	statements := []string{
 		`CREATE TABLE temp_samples (
 			id INTEGER PRIMARY KEY,
+			service_name TEXT NOT NULL,
+			machine_id TEXT NOT NULL,
 			timestamp INTEGER NOT NULL,
 			sensor_type TEXT NOT NULL,
 			sensor_number INTEGER NOT NULL,
@@ -176,6 +233,8 @@ func openAPITestQueries(t *testing.T) *database.Queries {
 		);`,
 		`CREATE TABLE valve_samples (
 			id INTEGER PRIMARY KEY,
+			service_name TEXT NOT NULL,
+			machine_id TEXT NOT NULL,
 			timestamp INTEGER NOT NULL,
 			sensor_type TEXT NOT NULL,
 			valve_number INTEGER NOT NULL,

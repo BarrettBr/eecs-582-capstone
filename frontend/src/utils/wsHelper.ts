@@ -37,6 +37,8 @@ export interface StreamMessage {
 	event_type?: string;
 	source: string;
 	service_name?: string;
+	machine_id?: string;
+	machine_name?: string;
 	timestamp: string;
 	data: unknown;
 }

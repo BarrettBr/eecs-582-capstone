@@ -27,6 +27,7 @@ export interface AdminSimulatorSourceSettings {
 	interval: string;
 	seed: number;
 	profile: string;
+	machine_count?: number;
 }
 
 export interface AdminSourceDefinition {

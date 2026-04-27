@@ -18,7 +18,7 @@ func TestBuildServiceRatesPayloadComputesPerServiceDeltaRate(t *testing.T) {
 	payload := buildServiceRatesPayload(snapshot, map[string]uint64{
 		"svc_a": 0,
 		"svc_b": 0,
-	}, 5*time.Second)
+	}, map[string]uint64{}, 5*time.Second)
 
 	if payload.IntervalSeconds != 5 {
 		t.Fatalf("IntervalSeconds = %d, want 5", payload.IntervalSeconds)

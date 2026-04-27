@@ -35,6 +35,9 @@ Known Faults:
 
 // TempSample is the canonical normalized temperature record emitted from source adapters.
 type TempSample struct {
+	ServiceName  string   `json:"service_name,omitempty"`
+	MachineID    string   `json:"machine_id,omitempty"`
+	MachineName  string   `json:"machine_name,omitempty"`
 	ID           uint16   `json:"id"`
 	Timestamp    string   `json:"timestamp"`
 	TimestampMs  int64    `json:"timestamp_ms"`
@@ -65,6 +68,12 @@ func (s TempSample) AnomalyLabels() []string {
 // ValidationValue returns one named field without building an intermediate map.
 func (s TempSample) ValidationValue(field string) (any, bool) {
 	switch field {
+	case "service_name":
+		return s.ServiceName, true
+	case "machine_id":
+		return s.MachineID, true
+	case "machine_name":
+		return s.MachineName, true
 	case "id":
 		return s.ID, true
 	case "timestamp":

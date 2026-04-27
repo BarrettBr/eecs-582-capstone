@@ -42,10 +42,18 @@ import (
 	"time"
 
 	"github.com/BarrettBr/eecs-582-capstone/internal/config"
+	ingestevents "github.com/BarrettBr/eecs-582-capstone/internal/ingest/events"
 )
 
 type bufferSubmitter interface {
 	Submit(context.Context, config.SourceDefinition, IngressEvent) error
+}
+
+type managedServiceIdentity struct {
+	ServiceName string
+	AliasName   string
+	MachineID   string
+	MachineName string
 }
 
 type managedService struct {
@@ -55,19 +63,23 @@ type managedService struct {
 	baseInterval    time.Duration
 	definitionKey   string
 	validationKey   string
+	identity        managedServiceIdentity
 	mu              sync.RWMutex
 	lifecycleState  string
 	lastError       string
 	pressureState   PressureState
 	currentInterval time.Duration
+	recentAnomalies []time.Time
 	cancel          context.CancelFunc
 	done            chan struct{}
 }
 
+const machineAlertWindow = 5 * time.Minute
+
 // description: Builds one managed service from a validated source definition.
 // input: source definition, default Modbus interval, and shared BufferManager submitter.
 // output: Returns a managedService ready to start or an error.
-func newManagedService(definition config.SourceDefinition, defaultModbusInterval time.Duration, submitter bufferSubmitter) (*managedService, error) {
+func newManagedService(definition config.SourceDefinition, identity managedServiceIdentity, defaultModbusInterval time.Duration, submitter bufferSubmitter) (*managedService, error) {
 	runner, err := newSourceRunner(definition, defaultModbusInterval)
 	if err != nil {
 		return nil, err
@@ -80,6 +92,7 @@ func newManagedService(definition config.SourceDefinition, defaultModbusInterval
 		baseInterval:    runner.interval,
 		definitionKey:   sourceDefinitionFingerprint(definition),
 		validationKey:   config.FileContentSignature(definition.ValidationFile),
+		identity:        identity,
 		lifecycleState:  "stopped",
 		pressureState:   PressureNormal,
 		currentInterval: runner.interval,
@@ -186,11 +199,16 @@ func (s *managedService) handleTick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	record = applyMachineIdentity(record, s.identity)
+	s.recordAnomalyTick(len(validation.Anomalies) > 0)
 
 	return s.submitter.Submit(ctx, s.definition, IngressEvent{
-		SourceName: s.definition.Name,
-		MLEnabled:  s.definition.MLEnabled,
-		Record:     record,
+		SourceName:  s.definition.Name,
+		ServiceName: s.identity.ServiceName,
+		MachineID:   s.identity.MachineID,
+		MachineName: s.identity.MachineName,
+		MLEnabled:   s.definition.MLEnabled,
+		Record:      record,
 	})
 }
 
@@ -235,18 +253,94 @@ func (s *managedService) interval() time.Duration {
 func (s *managedService) snapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	alertCount := countRecentAnomalies(s.recentAnomalies, time.Now().UTC())
+	connected := s.lifecycleState == "running"
+	lastAnomalyAt := ""
+	if len(s.recentAnomalies) > 0 {
+		lastAnomalyAt = s.recentAnomalies[len(s.recentAnomalies)-1].UTC().Format(time.RFC3339Nano)
+	}
 
 	return ServiceStatus{
-		Name:                 s.definition.Name,
-		AliasName:            s.definition.AliasName,
+		Name:                 s.identity.ServiceName,
+		AliasName:            s.identity.AliasName,
+		InstanceName:         s.definition.Name,
+		MachineID:            s.identity.MachineID,
+		MachineName:          s.identity.MachineName,
 		Mode:                 s.definition.Mode,
 		EventType:            s.definition.EventType,
 		LifecycleState:       s.lifecycleState,
+		Connected:            connected,
+		MachineCount:         1,
+		RecentAlertCount:     alertCount,
+		LastAnomalyAt:        lastAnomalyAt,
 		AdaptiveEnabled:      s.definition.FlowControl.AdaptiveEnabledValue(),
 		SupportsBackpressure: s.definition.FlowControl.SupportsBackpressureValue(s.definition.Mode),
 		RateReduced:          s.currentInterval > s.baseInterval,
 		CurrentInterval:      s.currentInterval,
 		LastError:            s.lastError,
+	}
+}
+
+func (s *managedService) recordAnomalyTick(hasAnomaly bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	if hasAnomaly {
+		s.recentAnomalies = append(s.recentAnomalies, now)
+	}
+	s.recentAnomalies = pruneRecentAnomalies(s.recentAnomalies, now)
+}
+
+func pruneRecentAnomalies(values []time.Time, now time.Time) []time.Time {
+	if len(values) == 0 {
+		return values
+	}
+	cutoff := now.Add(-machineAlertWindow)
+	keepAt := 0
+	for keepAt < len(values) && values[keepAt].Before(cutoff) {
+		keepAt++
+	}
+	if keepAt == 0 {
+		return values
+	}
+	if keepAt >= len(values) {
+		return values[:0]
+	}
+	return append(values[:0], values[keepAt:]...)
+}
+
+func countRecentAnomalies(values []time.Time, now time.Time) int {
+	return len(pruneRecentAnomalies(append([]time.Time(nil), values...), now))
+}
+
+func applyMachineIdentity(record ingestevents.RecordEvent, identity managedServiceIdentity) ingestevents.RecordEvent {
+	switch sample := record.(type) {
+	case ingestevents.TempSample:
+		sample.ServiceName = identity.ServiceName
+		sample.MachineID = identity.MachineID
+		sample.MachineName = identity.MachineName
+		return sample
+	case *ingestevents.TempSample:
+		if sample != nil {
+			sample.ServiceName = identity.ServiceName
+			sample.MachineID = identity.MachineID
+			sample.MachineName = identity.MachineName
+		}
+		return sample
+	case ingestevents.ValveSample:
+		sample.ServiceName = identity.ServiceName
+		sample.MachineID = identity.MachineID
+		sample.MachineName = identity.MachineName
+		return sample
+	case *ingestevents.ValveSample:
+		if sample != nil {
+			sample.ServiceName = identity.ServiceName
+			sample.MachineID = identity.MachineID
+			sample.MachineName = identity.MachineName
+		}
+		return sample
+	default:
+		return record
 	}
 }
 

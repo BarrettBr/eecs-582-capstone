@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,12 @@ type Registrar struct {
 	onCatalogApplied func(SystemStatusSnapshot, []string)
 	runCtx           context.Context
 	validationStop   context.CancelFunc
+}
+
+type runtimeServicePlan struct {
+	InstanceName string
+	Definition   config.SourceDefinition
+	Identity     managedServiceIdentity
 }
 
 // description: Builds a Registrar with source config path, initial catalog, and shared BufferManager.
@@ -165,10 +172,17 @@ func (r *Registrar) TriggerFaultInjection(sourceName string) error {
 
 	if sourceName != "" {
 		service, ok := r.services[sourceName]
-		if !ok {
-			return fmt.Errorf("simulator source %q not found", sourceName)
+		if ok {
+			return service.TriggerFaultInjection()
 		}
-		return service.TriggerFaultInjection()
+
+		// Support parent service names by routing to the first matching machine instance.
+		for _, candidate := range r.services {
+			if candidate.identity.ServiceName == sourceName && candidate.definition.Mode == "simulator" {
+				return candidate.TriggerFaultInjection()
+			}
+		}
+		return fmt.Errorf("simulator source %q not found", sourceName)
 	}
 
 	for _, service := range r.services {
@@ -186,23 +200,18 @@ func (r *Registrar) TriggerFaultInjection(sourceName string) error {
 func (r *Registrar) StatusSnapshot() SystemStatusSnapshot {
 	r.mu.RLock()
 	services := make(map[string]ServiceStatus, len(r.services))
-	for name, service := range r.services {
-		services[name] = service.snapshot()
+	for instanceName, service := range r.services {
+		services[instanceName] = service.snapshot()
 	}
 	lastReloadAt := r.lastReloadAt
 	lastReloadError := r.lastReloadError
 	r.mu.RUnlock()
 
 	bufferSnapshot := r.bufferManager.Snapshot()
-	merged := make([]ServiceStatus, 0, len(services))
-	names := make([]string, 0, len(services))
-	for name := range services {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	for _, name := range names {
-		status := services[name]
-		if bufferStatus, ok := bufferSnapshot.Services[name]; ok {
+	aggregatedByService := make(map[string]*ServiceStatus, len(services))
+	serviceNames := make([]string, 0, len(services))
+	for instanceName, status := range services {
+		if bufferStatus, ok := bufferSnapshot.Services[instanceName]; ok {
 			status.ReservedUnits = bufferStatus.ReservedUnits
 			status.BufferedUnits = bufferStatus.BufferedUnits
 			status.QueueDepth = bufferStatus.QueueDepth
@@ -212,7 +221,75 @@ func (r *Registrar) StatusSnapshot() SystemStatusSnapshot {
 			status.EvictedEvents = bufferStatus.EvictedEvents
 			status.SampledEvents = bufferStatus.SampledEvents
 		}
-		merged = append(merged, status)
+
+		aggregated := aggregatedByService[status.Name]
+		if aggregated == nil {
+			copied := status
+			copied.Machines = nil
+			copied.MachineID = ""
+			copied.MachineName = ""
+			copied.InstanceName = ""
+			copied.MachineCount = 0
+			aggregatedByService[status.Name] = &copied
+			aggregated = &copied
+			serviceNames = append(serviceNames, status.Name)
+		}
+
+		aggregated.ReservedUnits += status.ReservedUnits
+		aggregated.BufferedUnits += status.BufferedUnits
+		aggregated.QueueDepth += status.QueueDepth
+		aggregated.AdmittedEvents += status.AdmittedEvents
+		aggregated.DroppedEvents += status.DroppedEvents
+		aggregated.EvictedEvents += status.EvictedEvents
+		aggregated.SampledEvents += status.SampledEvents
+		aggregated.RecentAlertCount += status.RecentAlertCount
+		aggregated.MachineCount++
+		aggregated.Connected = aggregated.Connected || status.Connected
+		if status.CurrentInterval > aggregated.CurrentInterval {
+			aggregated.CurrentInterval = status.CurrentInterval
+		}
+		if status.LastError != "" {
+			aggregated.LastError = status.LastError
+		}
+		if status.LastAnomalyAt > aggregated.LastAnomalyAt {
+			aggregated.LastAnomalyAt = status.LastAnomalyAt
+		}
+		if status.LifecycleState != "running" && aggregated.LifecycleState == "running" {
+			aggregated.LifecycleState = "degraded"
+		}
+		if status.RateReduced {
+			aggregated.RateReduced = true
+		}
+		if status.Sampling {
+			aggregated.Sampling = true
+		}
+
+		aggregated.Machines = append(aggregated.Machines, MachineStatus{
+			ID:             status.MachineID,
+			Name:           status.MachineName,
+			ServiceName:    status.Name,
+			InstanceName:   instanceName,
+			LifecycleState: status.LifecycleState,
+			Connected:      status.Connected,
+			RecentAlerts:   status.RecentAlertCount,
+			AdmittedEvents: status.AdmittedEvents,
+			LastAnomalyAt:  status.LastAnomalyAt,
+		})
+	}
+	merged := make([]ServiceStatus, 0, len(aggregatedByService))
+	slices.Sort(serviceNames)
+	for _, name := range serviceNames {
+		service := aggregatedByService[name]
+		if service == nil {
+			continue
+		}
+		slices.SortFunc(service.Machines, func(left, right MachineStatus) int {
+			return strings.Compare(left.ID, right.ID)
+		})
+		if service.MachineCount > 0 {
+			service.Connected = allMachinesConnected(service.Machines)
+		}
+		merged = append(merged, *service)
 	}
 
 	snapshot := SystemStatusSnapshot{
@@ -230,6 +307,18 @@ func (r *Registrar) StatusSnapshot() SystemStatusSnapshot {
 		snapshot.LastReloadError = lastReloadError
 	}
 	return snapshot
+}
+
+func allMachinesConnected(machines []MachineStatus) bool {
+	if len(machines) == 0 {
+		return false
+	}
+	for _, machine := range machines {
+		if !machine.Connected {
+			return false
+		}
+	}
+	return true
 }
 
 // description: Applies pressure changes to all managed services and logs rate reduction changes.
@@ -265,35 +354,36 @@ func (r *Registrar) handlePressureChange(state PressureState) {
 func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCatalog, initial bool) error {
 	r.bufferManager.ApplyRuntimeConfig(catalog.Runtime.Buffering)
 
-	nextDefinitions := make(map[string]config.SourceDefinition)
-	for _, source := range catalog.Sources {
-		if source.Enabled {
-			nextDefinitions[source.Name] = source
-		}
+	plans := expandRuntimeServicePlans(catalog)
+	nextDefinitions := make(map[string]runtimeServicePlan, len(plans))
+	nextParents := make(map[string]struct{}, len(plans))
+	for _, plan := range plans {
+		nextDefinitions[plan.InstanceName] = plan
+		nextParents[plan.Identity.ServiceName] = struct{}{}
 	}
 
 	// Start new services or replace changed service definitions.
-	for name, definition := range nextDefinitions {
+	for instanceName, plan := range nextDefinitions {
 		r.mu.RLock()
-		existing := r.services[name]
+		existing := r.services[instanceName]
 		currentPressure := r.currentPressure
 		r.mu.RUnlock()
 
 		// Reuse the existing service when the definition is unchanged.
-		if existing != nil && existing.MatchesDefinition(definition) {
-			r.bufferManager.UpsertService(definition)
+		if existing != nil && existing.MatchesDefinition(plan.Definition) {
+			r.bufferManager.UpsertService(plan.Definition)
 			existing.SetPressureState(currentPressure)
 			continue
 		}
 
 		// Build a replacement service before disturbing the currently running one.
-		replacement, err := newManagedService(definition, r.defaultModbusInterval, r.bufferManager)
+		replacement, err := newManagedService(plan.Definition, plan.Identity, r.defaultModbusInterval, r.bufferManager)
 		if err != nil {
 			if existing != nil {
-				log.Printf("Registrar kept old service=%s after reload prep error: %v", name, err)
+				log.Printf("Registrar kept old service=%s machine=%s after reload prep error: %v", plan.Identity.ServiceName, plan.Identity.MachineID, err)
 				continue
 			}
-			log.Printf("Registrar failed to start new service=%s: %v", name, err)
+			log.Printf("Registrar failed to start new service=%s machine=%s: %v", plan.Identity.ServiceName, plan.Identity.MachineID, err)
 			continue
 		}
 
@@ -302,21 +392,21 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 		if existing != nil {
 			existing.Stop()
 		}
-		r.bufferManager.UpsertService(definition)
+		r.bufferManager.UpsertService(plan.Definition)
 
 		// Publish the replacement so future lookups see the new service.
 		r.mu.Lock()
-		r.services[name] = replacement
+		r.services[instanceName] = replacement
 		r.mu.Unlock()
 
 		// Start the replacement and report whether it was added or restarted.
 		replacement.Start(ctx)
 		if existing != nil {
-			log.Printf("Registrar restarted service=%s", name)
+			log.Printf("Registrar restarted service=%s machine=%s", plan.Identity.ServiceName, plan.Identity.MachineID)
 		} else if initial {
-			log.Printf("Registrar started service=%s", name)
+			log.Printf("Registrar started service=%s machine=%s", plan.Identity.ServiceName, plan.Identity.MachineID)
 		} else {
-			log.Printf("Registrar added service=%s", name)
+			log.Printf("Registrar added service=%s machine=%s", plan.Identity.ServiceName, plan.Identity.MachineID)
 		}
 	}
 
@@ -328,23 +418,29 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 	r.mu.RUnlock()
 
 	// Stop services that were removed from the latest catalog.
-	removedServices := make([]string, 0)
-	for _, name := range currentServices {
-		if _, ok := nextDefinitions[name]; ok {
+	removedServices := make(map[string]struct{})
+	for _, instanceName := range currentServices {
+		if _, ok := nextDefinitions[instanceName]; ok {
 			continue
 		}
 
 		r.mu.Lock()
-		service := r.services[name]
-		delete(r.services, name)
+		service := r.services[instanceName]
+		delete(r.services, instanceName)
 		r.mu.Unlock()
 
 		if service != nil {
 			service.Stop()
 		}
-		r.bufferManager.RemoveService(name)
-		removedServices = append(removedServices, name)
-		log.Printf("Registrar removed service=%s", name)
+		r.bufferManager.RemoveService(instanceName)
+		if service != nil && service.identity.ServiceName != "" {
+			if _, keep := nextParents[service.identity.ServiceName]; !keep {
+				removedServices[service.identity.ServiceName] = struct{}{}
+			}
+			log.Printf("Registrar removed service=%s machine=%s", service.identity.ServiceName, service.identity.MachineID)
+		} else {
+			log.Printf("Registrar removed instance=%s", instanceName)
+		}
 	}
 
 	r.mu.Lock()
@@ -357,7 +453,7 @@ func (r *Registrar) applyCatalog(ctx context.Context, catalog *config.SourceCata
 		log.Printf("Registrar applied source reload from %s", r.sourceConfigPath)
 	}
 	if r.onCatalogApplied != nil {
-		r.onCatalogApplied(r.StatusSnapshot(), removedServices)
+		r.onCatalogApplied(r.StatusSnapshot(), sortedKeys(removedServices))
 	}
 	return nil
 }
@@ -420,4 +516,78 @@ func validationPathsFromCatalog(catalog *config.SourceCatalog) []string {
 	}
 	slices.Sort(paths)
 	return paths
+}
+
+func expandRuntimeServicePlans(catalog *config.SourceCatalog) []runtimeServicePlan {
+	if catalog == nil {
+		return nil
+	}
+
+	plans := make([]runtimeServicePlan, 0, len(catalog.Sources))
+	for _, source := range catalog.Sources {
+		if !source.Enabled {
+			continue
+		}
+
+		if source.Mode == "simulator" && source.Simulator != nil {
+			machineCount := source.Simulator.MachineCount
+			if machineCount <= 0 {
+				machineCount = 3
+			}
+			for index := 0; index < machineCount; index++ {
+				machineID := fmt.Sprintf("m%d", index+1)
+				instance := source
+				instance.Name = fmt.Sprintf("%s::%s", source.Name, machineID)
+				simulatorCopy := *source.Simulator
+				simulatorCopy.Seed = source.Simulator.Seed + int64(index)
+				instance.Simulator = &simulatorCopy
+				plans = append(plans, runtimeServicePlan{
+					InstanceName: instance.Name,
+					Definition:   instance,
+					Identity: managedServiceIdentity{
+						ServiceName: source.Name,
+						AliasName:   source.AliasName,
+						MachineID:   machineID,
+						MachineName: machineDisplayName(source, index+1),
+					},
+				})
+			}
+			continue
+		}
+
+		instance := source
+		instance.Name = source.Name
+		plans = append(plans, runtimeServicePlan{
+			InstanceName: instance.Name,
+			Definition:   instance,
+			Identity: managedServiceIdentity{
+				ServiceName: source.Name,
+				AliasName:   source.AliasName,
+				MachineID:   "m1",
+				MachineName: machineDisplayName(source, 1),
+			},
+		})
+	}
+
+	return plans
+}
+
+func machineDisplayName(source config.SourceDefinition, machineNumber int) string {
+	base := strings.TrimSpace(source.AliasName)
+	if base == "" {
+		base = source.Name
+	}
+	return fmt.Sprintf("%s Machine %d", base, machineNumber)
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(values))
+	for value := range values {
+		keys = append(keys, value)
+	}
+	slices.Sort(keys)
+	return keys
 }

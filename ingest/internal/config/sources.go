@@ -44,6 +44,7 @@ import (
 const (
 	defaultSharedUnits                = 256
 	defaultSamplingSharedThreshold    = 0.80
+	defaultSimulatorMachineCount      = 3
 	defaultReservedUnits              = 64
 	defaultSamplingEveryN             = 4
 	defaultHighIntervalMultiplier     = 2
@@ -117,9 +118,10 @@ type ModbusSourceSettings struct {
 }
 
 type SimulatorSourceSettings struct {
-	Interval string `json:"interval"`
-	Seed     int64  `json:"seed"`
-	Profile  string `json:"profile"`
+	Interval     string `json:"interval"`
+	Seed         int64  `json:"seed"`
+	Profile      string `json:"profile"`
+	MachineCount int    `json:"machine_count,omitempty"`
 }
 
 func (cfg FlowControlConfig) AdaptiveEnabledValue() bool {
@@ -256,6 +258,9 @@ func applyCatalogDefaults(catalog *SourceCatalog) {
 		}
 		if flow.Backpressure.CriticalIntervalMultiplier <= 0 {
 			flow.Backpressure.CriticalIntervalMultiplier = defaultCriticalIntervalMultiplier
+		}
+		if catalog.Sources[i].Simulator != nil && catalog.Sources[i].Simulator.MachineCount == 0 {
+			catalog.Sources[i].Simulator.MachineCount = defaultSimulatorMachineCount
 		}
 	}
 }
@@ -404,6 +409,9 @@ func validateSourceDefinition(source *SourceDefinition, seen map[string]struct{}
 		}
 		if _, err := time.ParseDuration(source.Simulator.Interval); err != nil {
 			return fmt.Errorf("source %q invalid simulator interval %q: %w", source.Name, source.Simulator.Interval, err)
+		}
+		if source.Simulator.MachineCount <= 0 {
+			return fmt.Errorf("source %q simulator machine_count must be > 0", source.Name)
 		}
 	default:
 		return fmt.Errorf("source %q unsupported mode %q", source.Name, source.Mode)

@@ -1,6 +1,8 @@
 -- +goose Up
 CREATE TABLE valve_samples (
     id INTEGER PRIMARY KEY,
+    service_name TEXT NOT NULL,
+    machine_id TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
     sensor_type TEXT NOT NULL,
     valve_number INTEGER NOT NULL,
@@ -8,6 +10,7 @@ CREATE TABLE valve_samples (
     flow_rate REAL NOT NULL
 );
 CREATE INDEX idx_valve_samples_timestamp ON valve_samples(timestamp);
+CREATE INDEX idx_valve_samples_service_machine_time ON valve_samples(service_name, machine_id, timestamp);
 
 CREATE TABLE valve_sample_anomalies (
     id INTEGER PRIMARY KEY,

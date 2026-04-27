@@ -1,6 +1,8 @@
 -- name: GetTempHistorySinceUnix :many
 SELECT
     ts.id,
+    ts.service_name,
+    ts.machine_id,
     ts.timestamp,
     ts.sensor_type,
     ts.sensor_number,
@@ -18,6 +20,8 @@ ORDER BY ts.timestamp DESC;
 -- name: GetValveHistorySinceUnix :many
 SELECT
     vs.id,
+    vs.service_name,
+    vs.machine_id,
     vs.timestamp,
     vs.sensor_type,
     vs.valve_number,
@@ -76,3 +80,29 @@ SELECT
         SELECT SUM(CASE WHEN is_open THEN MAX(0, next_ts - ts) ELSE 0 END)
         FROM valve_open_intervals
     ), 0) AS INTEGER) AS valve_open_duration_seconds;
+
+-- name: GetTempMachineHistorySinceUnix :many
+SELECT
+    ts.timestamp,
+    CAST(AVG(ts.temperature) AS REAL) AS avg_value,
+    CAST(COALESCE(COUNT(ta.id), 0) AS INTEGER) AS alert_count
+FROM temp_samples ts
+LEFT JOIN temp_sample_anomalies ta ON ta.temp_sample_id = ts.id
+WHERE ts.service_name = sqlc.arg(service_name)
+  AND ts.machine_id = sqlc.arg(machine_id)
+  AND ts.timestamp >= sqlc.arg(since_unix)
+GROUP BY ts.timestamp
+ORDER BY ts.timestamp ASC;
+
+-- name: GetValveMachineHistorySinceUnix :many
+SELECT
+    vs.timestamp,
+    CAST(AVG(vs.flow_rate) AS REAL) AS avg_value,
+    CAST(COALESCE(COUNT(va.id), 0) AS INTEGER) AS alert_count
+FROM valve_samples vs
+LEFT JOIN valve_sample_anomalies va ON va.valve_sample_id = vs.id
+WHERE vs.service_name = sqlc.arg(service_name)
+  AND vs.machine_id = sqlc.arg(machine_id)
+  AND vs.timestamp >= sqlc.arg(since_unix)
+GROUP BY vs.timestamp
+ORDER BY vs.timestamp ASC;

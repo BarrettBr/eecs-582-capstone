@@ -42,7 +42,8 @@
       "simulator": {
         "interval": "100ms",
         "seed": 42,
-        "profile": "temperature_default"
+        "profile": "temperature_default",
+        "machine_count": 3
       }
     },
     {
@@ -68,7 +69,8 @@
       "simulator": {
         "interval": "100ms",
         "seed": 84,
-        "profile": "valve_default"
+        "profile": "valve_default",
+        "machine_count": 3
       }
     },
     {

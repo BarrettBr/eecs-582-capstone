@@ -78,6 +78,9 @@ func TestLoadSourceCatalogAppliesDefaults(t *testing.T) {
 	if got := catalog.Sources[0].FlowControl.ReservedUnits; got != defaultReservedUnits {
 		t.Fatalf("source reserved units = %d, want %d", got, defaultReservedUnits)
 	}
+	if got := catalog.Sources[0].Simulator.MachineCount; got != defaultSimulatorMachineCount {
+		t.Fatalf("source simulator machine_count = %d, want %d", got, defaultSimulatorMachineCount)
+	}
 	if got := catalog.Sources[2].FlowControl.SupportsBackpressureValue(catalog.Sources[2].Mode); !got {
 		t.Fatalf("modbus source supports backpressure = false, want true")
 	}
@@ -310,5 +313,40 @@ func TestLoadSourceCatalogWithProfileRejectsUnknownSource(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `references unknown source "missing_service"`) {
 		t.Fatalf("LoadSourceCatalogWithProfile() error = %v, want unknown source reference", err)
+	}
+}
+
+func TestLoadSourceCatalogRejectsInvalidSimulatorMachineCount(t *testing.T) {
+	baseDir := t.TempDir()
+	path := filepath.Join(baseDir, "sources.json")
+
+	content := `{
+  "sources": [
+    {
+      "name": "temp_dev",
+      "event_type": "temperature",
+      "mode": "simulator",
+      "enabled": true,
+      "validation_file": "config/validation/temperature.json",
+      "simulator": {
+        "interval": "100ms",
+        "seed": 42,
+        "profile": "temperature_default",
+        "machine_count": -1
+      }
+    }
+  ]
+}`
+
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	_, err := LoadSourceCatalog(path)
+	if err == nil {
+		t.Fatalf("LoadSourceCatalog() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), `machine_count must be > 0`) {
+		t.Fatalf("LoadSourceCatalog() error = %v, want machine_count validation error", err)
 	}
 }

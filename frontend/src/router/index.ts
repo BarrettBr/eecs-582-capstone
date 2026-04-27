@@ -14,6 +14,7 @@ import DashboardView from "@/views/DashboardView.vue";
 import AboutView from "@/views/AboutView.vue";
 import ExportView from "@/views/ExportView.vue";
 import AdminView from "@/views/AdminView.vue";
+import MachineInspectionView from "@/views/MachineInspectionView.vue";
 import AppLayout from "@/layout/AppLayout.vue";
 
 function hasStoredToken() {
@@ -73,6 +74,11 @@ const router = createRouter({
 							path: "admin",
 							name: "admin",
 							component: AdminView,
+						},
+						{
+							path: "machine-inspection",
+							name: "machine-inspection",
+							component: MachineInspectionView,
 						},
 					],
 				},

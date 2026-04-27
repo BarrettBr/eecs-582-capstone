@@ -56,6 +56,8 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 	batch := []IngressEvent{
 		{
 			Record: ingestevents.TempSample{
+				ServiceName:  "temp_dev",
+				MachineID:    "m1",
 				Timestamp:    "2026-02-28T12:00:00Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 1,
@@ -66,6 +68,8 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 		},
 		{
 			Record: ingestevents.TempSample{
+				ServiceName:  "temp_dev",
+				MachineID:    "m2",
 				Timestamp:    "2026-02-28T12:00:01Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 2,
@@ -77,6 +81,8 @@ func TestDeliverSQLBatchStoresAllAnomaliesAndSamplesNormalEvents(t *testing.T) {
 		},
 		{
 			Record: ingestevents.TempSample{
+				ServiceName:  "temp_dev",
+				MachineID:    "m3",
 				Timestamp:    "2026-02-28T12:00:02Z",
 				SensorType:   "temperature_control_system",
 				SensorNumber: 3,
@@ -128,6 +134,8 @@ func createIngestTables(t *testing.T, db *sql.DB) {
 	statements := []string{
 		`CREATE TABLE temp_samples (
 			id INTEGER PRIMARY KEY,
+			service_name TEXT NOT NULL,
+			machine_id TEXT NOT NULL,
 			timestamp INTEGER NOT NULL,
 			sensor_type TEXT NOT NULL,
 			sensor_number INTEGER NOT NULL,

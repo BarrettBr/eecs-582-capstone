@@ -23,6 +23,8 @@ export interface TempEventData {
 	event_type?: "temperature";
 	id?: number;
 	service_name?: string;
+	machine_id?: string;
+	machine_name?: string;
 	timestamp: string;
 	timestamp_ms?: number;
 	display_time?: string;
@@ -39,6 +41,8 @@ export interface ValveEventData {
 	event_type?: "valve";
 	id?: number;
 	service_name?: string;
+	machine_id?: string;
+	machine_name?: string;
 	timestamp: string;
 	timestamp_ms?: number;
 	display_time?: string;
@@ -53,6 +57,8 @@ export interface ValveEventData {
 export interface MLAnomalyPayload {
 	schema: string;
 	service_name?: string;
+	machine_id?: string;
+	machine_name?: string;
 	event_type: string;
 	generated_at: string;
 	generated_at_ms?: number;
@@ -73,11 +79,26 @@ export interface IngestionMetricsResponse {
 	total_records?: number;
 }
 
+export interface ServiceMachineEntry {
+	id: string;
+	name?: string;
+	service_name?: string;
+	instance_name: string;
+	lifecycle_state: string;
+	connected: boolean;
+	recent_alerts: number;
+	admitted_events: number;
+	admitted_eps_5s?: number;
+	last_anomaly_at?: string;
+}
+
 export interface ServiceCatalogEntry {
 	name: string;
 	alias_name?: string;
 	mode: string;
 	event_type: ServiceEventType;
+	machine_count?: number;
+	machines?: ServiceMachineEntry[];
 	admitted_eps_5s?: number;
 }
 
@@ -94,6 +115,7 @@ export interface ServiceCatalogPayload {
 export interface ServiceRateEntry {
 	name: string;
 	admitted_eps_5s?: number;
+	machines?: ServiceMachineEntry[];
 }
 
 export interface ServiceRatesPayload {

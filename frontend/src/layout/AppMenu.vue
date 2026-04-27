@@ -37,6 +37,15 @@ function formatServiceRate(rate?: number): string | undefined {
 	return `${Math.round(rate)}/s`;
 }
 
+function formatServiceLabel(
+	name: string,
+	machineCount?: number,
+): string {
+	const count =
+		typeof machineCount === "number" && machineCount > 0 ? machineCount : 1;
+	return `${name} with ${count} machines`;
+}
+
 const serviceItems = computed<MenuItem[]>(() => {
 	if (availableServices.value.length === 0) {
 		return [
@@ -49,7 +58,7 @@ const serviceItems = computed<MenuItem[]>(() => {
 	}
 
 	return availableServices.value.map((service) => ({
-		label: service.name,
+		label: formatServiceLabel(service.name, service.machine_count ?? service.machines?.length),
 		meta: formatServiceRate(service.admitted_eps_5s),
 		icon: "pi pi-chart-line",
 		to: `/services/${service.name}`,
@@ -71,6 +80,11 @@ const allItems = computed<MenuItem[]>(() => [
 		label: "Admin",
 		icon: "pi pi-shield",
 		to: "/admin",
+	},
+	{
+		label: "Machine Insepction",
+		icon: "pi pi-sitemap",
+		to: "/machine-inspection",
 	},
 	{ separator: true },
 	{

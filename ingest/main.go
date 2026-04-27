@@ -170,11 +170,27 @@ func runMigrations(db *sql.DB, migrationsPath string) error {
 func buildServiceCatalogPayload(snapshot ingestruntime.SystemStatusSnapshot) stream.ServiceCatalogPayload {
 	services := make([]stream.ServiceCatalogEntry, 0, len(snapshot.Services))
 	for _, service := range snapshot.Services {
+		machines := make([]stream.ServiceMachineEntry, 0, len(service.Machines))
+		for _, machine := range service.Machines {
+			machines = append(machines, stream.ServiceMachineEntry{
+				ID:             machine.ID,
+				Name:           machine.Name,
+				ServiceName:    machine.ServiceName,
+				InstanceName:   machine.InstanceName,
+				LifecycleState: machine.LifecycleState,
+				Connected:      machine.Connected,
+				RecentAlerts:   machine.RecentAlerts,
+				AdmittedEvents: machine.AdmittedEvents,
+				LastAnomalyAt:  machine.LastAnomalyAt,
+			})
+		}
 		services = append(services, stream.ServiceCatalogEntry{
-			Name:      service.Name,
-			AliasName: service.AliasName,
-			Mode:      service.Mode,
-			EventType: service.EventType,
+			Name:         service.Name,
+			AliasName:    service.AliasName,
+			Mode:         service.Mode,
+			EventType:    service.EventType,
+			MachineCount: service.MachineCount,
+			Machines:     machines,
 		})
 	}
 	return stream.ServiceCatalogPayload{
@@ -184,8 +200,20 @@ func buildServiceCatalogPayload(snapshot ingestruntime.SystemStatusSnapshot) str
 }
 
 type serviceRateEntry struct {
-	Name          string  `json:"name"`
-	AdmittedEPS5s float64 `json:"admitted_eps_5s"`
+	Name          string                    `json:"name"`
+	AdmittedEPS5s float64                   `json:"admitted_eps_5s"`
+	Machines      []serviceMachineRateEntry `json:"machines,omitempty"`
+}
+
+type serviceMachineRateEntry struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name,omitempty"`
+	InstanceName   string  `json:"instance_name"`
+	Connected      bool    `json:"connected"`
+	RecentAlerts   int     `json:"recent_alerts"`
+	LastAnomalyAt  string  `json:"last_anomaly_at,omitempty"`
+	AdmittedEPS5s  float64 `json:"admitted_eps_5s"`
+	AdmittedEvents uint64  `json:"admitted_events"`
 }
 
 type serviceRatesPayload struct {
@@ -202,14 +230,16 @@ func broadcastServiceRates(ctx context.Context, wsServer *stream.Server, registr
 	defer ticker.Stop()
 
 	previousTotals := make(map[string]uint64)
+	previousMachineTotals := make(map[string]uint64)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			snapshot := registrar.StatusSnapshot()
-			payload := buildServiceRatesPayload(snapshot, previousTotals, interval)
+			payload := buildServiceRatesPayload(snapshot, previousTotals, previousMachineTotals, interval)
 			previousTotals = snapshotServiceTotals(snapshot)
+			previousMachineTotals = snapshotMachineTotals(snapshot)
 			data, err := json.Marshal(payload)
 			if err != nil {
 				log.Printf("Service rate payload encode error: %v", err)
@@ -225,7 +255,7 @@ func broadcastServiceRates(ctx context.Context, wsServer *stream.Server, registr
 	}
 }
 
-func buildServiceRatesPayload(snapshot ingestruntime.SystemStatusSnapshot, previousTotals map[string]uint64, interval time.Duration) serviceRatesPayload {
+func buildServiceRatesPayload(snapshot ingestruntime.SystemStatusSnapshot, previousTotals map[string]uint64, previousMachineTotals map[string]uint64, interval time.Duration) serviceRatesPayload {
 	intervalSeconds := interval.Seconds()
 	if intervalSeconds <= 0 {
 		intervalSeconds = 1
@@ -236,9 +266,26 @@ func buildServiceRatesPayload(snapshot ingestruntime.SystemStatusSnapshot, previ
 		previous := previousTotals[service.Name]
 		delta := service.AdmittedEvents - previous
 		rate := float64(delta) / intervalSeconds
+		machines := make([]serviceMachineRateEntry, 0, len(service.Machines))
+		for _, machine := range service.Machines {
+			machineKey := machineRateKey(service.Name, machine.InstanceName)
+			previousMachine := previousMachineTotals[machineKey]
+			machineDelta := machine.AdmittedEvents - previousMachine
+			machines = append(machines, serviceMachineRateEntry{
+				ID:             machine.ID,
+				Name:           machine.Name,
+				InstanceName:   machine.InstanceName,
+				Connected:      machine.Connected,
+				RecentAlerts:   machine.RecentAlerts,
+				LastAnomalyAt:  machine.LastAnomalyAt,
+				AdmittedEvents: machine.AdmittedEvents,
+				AdmittedEPS5s:  roundRate(float64(machineDelta) / intervalSeconds),
+			})
+		}
 		services = append(services, serviceRateEntry{
 			Name:          service.Name,
 			AdmittedEPS5s: roundRate(rate),
+			Machines:      machines,
 		})
 	}
 
@@ -254,6 +301,20 @@ func snapshotServiceTotals(snapshot ingestruntime.SystemStatusSnapshot) map[stri
 		totals[service.Name] = service.AdmittedEvents
 	}
 	return totals
+}
+
+func snapshotMachineTotals(snapshot ingestruntime.SystemStatusSnapshot) map[string]uint64 {
+	totals := make(map[string]uint64)
+	for _, service := range snapshot.Services {
+		for _, machine := range service.Machines {
+			totals[machineRateKey(service.Name, machine.InstanceName)] = machine.AdmittedEvents
+		}
+	}
+	return totals
+}
+
+func machineRateKey(serviceName, instanceName string) string {
+	return serviceName + "|" + instanceName
 }
 
 func roundRate(rate float64) float64 {

@@ -118,6 +118,8 @@ func buildQuerySelection(endpoint, kind, window string) (querySelection, error) 
 
 type historyEvent struct {
 	ID          int64    `json:"id"`
+	ServiceName string   `json:"service_name,omitempty"`
+	MachineID   string   `json:"machine_id,omitempty"`
 	Timestamp   int64    `json:"timestamp"`
 	SensorType  string   `json:"sensor_type"`
 	SourceKind  string   `json:"source_kind"`
@@ -196,6 +198,8 @@ func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, s
 		for _, row := range rows {
 			items = append(items, historyEvent{
 				ID:          row.ID,
+				ServiceName: row.ServiceName,
+				MachineID:   row.MachineID,
 				Timestamp:   row.Timestamp,
 				SensorType:  row.SensorType,
 				SourceKind:  "temp",
@@ -216,15 +220,17 @@ func (cfg *apiConfig) runSelectedQuery(w http.ResponseWriter, r *http.Request, s
 		items = make([]historyEvent, 0, len(rows))
 		for _, row := range rows {
 			items = append(items, historyEvent{
-				ID:         row.ID,
-				Timestamp:  row.Timestamp,
-				SensorType: row.SensorType,
-				SourceKind: "valve",
-				SourceID:   row.ValveNumber,
-				IsOpen:     row.IsOpen,
-				FlowRate:   row.FlowRate,
-				AlertCount: row.AlertCount,
-				Anomalies:  splitAnomalies(row.AnomalyLabels),
+				ID:          row.ID,
+				ServiceName: row.ServiceName,
+				MachineID:   row.MachineID,
+				Timestamp:   row.Timestamp,
+				SensorType:  row.SensorType,
+				SourceKind:  "valve",
+				SourceID:    row.ValveNumber,
+				IsOpen:      row.IsOpen,
+				FlowRate:    row.FlowRate,
+				AlertCount:  row.AlertCount,
+				Anomalies:   splitAnomalies(row.AnomalyLabels),
 			})
 		}
 	}

@@ -32,12 +32,14 @@ func (s *Server) Publish(msg Message) {
 }
 
 // PublishScopedEvent queues one ingest event for a specific service room.
-func (s *Server) PublishScopedEvent(eventType, serviceName string, payload []byte, timestamp string) {
+func (s *Server) PublishScopedEvent(eventType, serviceName, machineID, machineName string, payload []byte, timestamp string) {
 	s.Publish(Message{
 		Kind:        "event",
 		EventType:   eventType,
 		Source:      "ingest",
 		ServiceName: serviceName,
+		MachineID:   machineID,
+		MachineName: machineName,
 		Timestamp:   timestamp,
 		Data:        payload,
 	})

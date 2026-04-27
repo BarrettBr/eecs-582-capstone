@@ -40,7 +40,12 @@ import (
 )
 
 func TestManagedServiceSetPressureStateAdjustsIntervalForBackpressureService(t *testing.T) {
-	service, err := newManagedService(testRegistrarSource("svc_backpressure", mustValidationPath(t, "temperature.json")), 5*time.Millisecond, noopSubmitter{})
+	service, err := newManagedService(
+		testRegistrarSource("svc_backpressure", mustValidationPath(t, "temperature.json")),
+		testServiceIdentity("svc_backpressure"),
+		5*time.Millisecond,
+		noopSubmitter{},
+	)
 	if err != nil {
 		t.Fatalf("newManagedService() error = %v", err)
 	}
@@ -67,7 +72,7 @@ func TestManagedServiceSetPressureStateSkipsNonBackpressureService(t *testing.T)
 	definition := testRegistrarSource("svc_no_backpressure", mustValidationPath(t, "temperature.json"))
 	definition.FlowControl.SupportsBackpressure = boolPointer(false)
 
-	service, err := newManagedService(definition, 5*time.Millisecond, noopSubmitter{})
+	service, err := newManagedService(definition, testServiceIdentity(definition.Name), 5*time.Millisecond, noopSubmitter{})
 	if err != nil {
 		t.Fatalf("newManagedService() error = %v", err)
 	}
@@ -81,7 +86,12 @@ func TestManagedServiceSetPressureStateSkipsNonBackpressureService(t *testing.T)
 }
 
 func TestManagedServiceTriggerFaultInjectionAndSnapshot(t *testing.T) {
-	service, err := newManagedService(testRegistrarSource("svc_fault", mustValidationPath(t, "temperature.json")), 5*time.Millisecond, noopSubmitter{})
+	service, err := newManagedService(
+		testRegistrarSource("svc_fault", mustValidationPath(t, "temperature.json")),
+		testServiceIdentity("svc_fault"),
+		5*time.Millisecond,
+		noopSubmitter{},
+	)
 	if err != nil {
 		t.Fatalf("newManagedService() error = %v", err)
 	}
@@ -157,7 +167,7 @@ func TestManagedServiceTriggerFaultInjectionRejectsUnavailableRunner(t *testing.
 func TestManagedServiceMatchesDefinitionUsesNormalizedFingerprint(t *testing.T) {
 	definition := testRegistrarSource("svc_match", mustValidationPath(t, "temperature.json"))
 
-	service, err := newManagedService(definition, 5*time.Millisecond, noopSubmitter{})
+	service, err := newManagedService(definition, testServiceIdentity(definition.Name), 5*time.Millisecond, noopSubmitter{})
 	if err != nil {
 		t.Fatalf("newManagedService() error = %v", err)
 	}
@@ -217,6 +227,15 @@ func (e staticError) Error() string { return string(e) }
 
 func assertErr(msg string) error {
 	return staticError(msg)
+}
+
+func testServiceIdentity(serviceName string) managedServiceIdentity {
+	return managedServiceIdentity{
+		ServiceName: serviceName,
+		AliasName:   serviceName,
+		MachineID:   "m1",
+		MachineName: serviceName + " Machine 1",
+	}
 }
 
 type modbusClientRecorder struct {

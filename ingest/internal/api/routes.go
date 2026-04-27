@@ -63,6 +63,7 @@ type Registration struct {
 	PingPath             string
 	HistoryPath          string
 	ReportPath           string
+	MachineHistoryPath   string
 	IngestionStatusPath  string
 	IngestionMetricsPath string
 	AdminConfigPath      string
@@ -96,6 +97,7 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 	pingPath := path.Join(apiCfg.basePath, "ping")
 	historyPath := path.Join(apiCfg.basePath, "history", "{kind}", "{window}")
 	reportPath := path.Join(apiCfg.basePath, "report", "{kind}", "{window}")
+	machineHistoryPath := path.Join(apiCfg.basePath, "machineHistory", "{machineId}")
 	ingestionStatusPath := path.Join(apiCfg.basePath, "ingestion", "status")
 	ingestionMetricsPath := path.Join(apiCfg.basePath, "ingestion", "metrics")
 	adminConfigPath := path.Join(apiCfg.basePath, "admin", "config")
@@ -106,6 +108,7 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		"GET " + pingPath:             apiCfg.pingHandler,
 		"GET " + historyPath:          apiCfg.historyHandler,
 		"GET " + reportPath:           apiCfg.reportHandler,
+		"GET " + machineHistoryPath:   apiCfg.machineHistoryHandler,
 		"GET " + ingestionStatusPath:  apiCfg.ingestionStatusHandler,
 		"GET " + ingestionMetricsPath: apiCfg.ingestionMetricsHandler,
 		"GET " + adminConfigPath:      apiCfg.adminConfigHandler,
@@ -128,6 +131,7 @@ func RegisterRoutes(registrar HTTPRegistrar, cfg Config) Registration {
 		PingPath:             pingPath,
 		HistoryPath:          historyPath,
 		ReportPath:           reportPath,
+		MachineHistoryPath:   machineHistoryPath,
 		IngestionStatusPath:  ingestionStatusPath,
 		IngestionMetricsPath: ingestionMetricsPath,
 		AdminConfigPath:      adminConfigPath,

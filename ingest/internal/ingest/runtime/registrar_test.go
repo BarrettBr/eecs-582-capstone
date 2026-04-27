@@ -87,18 +87,20 @@ func TestRegistrarApplyCatalogAddsAndRemovesServices(t *testing.T) {
 	if err := registrar.applyCatalog(ctx, initialCatalog, true); err != nil {
 		t.Fatalf("applyCatalog(initial) error = %v", err)
 	}
-	if _, ok := registrar.services["svc_a"]; !ok {
-		t.Fatalf("svc_a missing after initial apply")
+	initialSnapshot := registrar.StatusSnapshot()
+	if len(initialSnapshot.Services) != 1 || initialSnapshot.Services[0].Name != "svc_a" {
+		t.Fatalf("initial snapshot services = %+v, want aggregated svc_a", initialSnapshot.Services)
+	}
+	if initialSnapshot.Services[0].MachineCount != 3 {
+		t.Fatalf("initial svc_a machine_count = %d, want 3", initialSnapshot.Services[0].MachineCount)
 	}
 
 	if err := registrar.applyCatalog(ctx, updatedCatalog, false); err != nil {
 		t.Fatalf("applyCatalog(updated) error = %v", err)
 	}
-	if _, ok := registrar.services["svc_a"]; ok {
-		t.Fatalf("svc_a still present after removal")
-	}
-	if _, ok := registrar.services["svc_b"]; !ok {
-		t.Fatalf("svc_b missing after add")
+	updatedSnapshot := registrar.StatusSnapshot()
+	if len(updatedSnapshot.Services) != 1 || updatedSnapshot.Services[0].Name != "svc_b" {
+		t.Fatalf("updated snapshot services = %+v, want aggregated svc_b only", updatedSnapshot.Services)
 	}
 }
 
@@ -345,7 +347,7 @@ func TestRegistrarRunReloadsServiceWhenValidationFileChanges(t *testing.T) {
 	})
 
 	registrar.mu.RLock()
-	initialService := registrar.services["svc_a"]
+	initialService := findServiceInstance(registrar, "svc_a", "m1")
 	initialReloadAt := registrar.lastReloadAt
 	registrar.mu.RUnlock()
 	if initialService == nil {
@@ -370,7 +372,7 @@ func TestRegistrarRunReloadsServiceWhenValidationFileChanges(t *testing.T) {
 		}
 		registrar.mu.RLock()
 		defer registrar.mu.RUnlock()
-		currentService := registrar.services["svc_a"]
+		currentService := findServiceInstance(registrar, "svc_a", "m1")
 		return currentService != nil &&
 			currentService != initialService &&
 			registrar.lastReloadAt.After(initialReloadAt)
@@ -438,6 +440,15 @@ func serviceStatusByName(snapshot SystemStatusSnapshot) map[string]ServiceStatus
 		services[service.Name] = service
 	}
 	return services
+}
+
+func findServiceInstance(registrar *Registrar, serviceName, machineID string) *managedService {
+	for _, service := range registrar.services {
+		if service.identity.ServiceName == serviceName && service.identity.MachineID == machineID {
+			return service
+		}
+	}
+	return nil
 }
 
 func mustValidationPath(t *testing.T, name string) string {

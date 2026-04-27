@@ -32,6 +32,9 @@ Known Faults:
 
 // ValveSample is the canonical normalized valve record emitted from source adapters.
 type ValveSample struct {
+	ServiceName string   `json:"service_name,omitempty"`
+	MachineID   string   `json:"machine_id,omitempty"`
+	MachineName string   `json:"machine_name,omitempty"`
 	ID          uint16   `json:"id"`
 	Timestamp   string   `json:"timestamp"`
 	TimestampMs int64    `json:"timestamp_ms"`
@@ -56,6 +59,12 @@ func (s ValveSample) AnomalyLabels() []string {
 
 func (s ValveSample) ValidationValue(field string) (any, bool) {
 	switch field {
+	case "service_name":
+		return s.ServiceName, true
+	case "machine_id":
+		return s.MachineID, true
+	case "machine_name":
+		return s.MachineName, true
 	case "id":
 		return s.ID, true
 	case "timestamp":

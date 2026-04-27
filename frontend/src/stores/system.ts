@@ -118,6 +118,14 @@ export const useSystemStore = defineStore("system", () => {
 				service.admitted_eps_5s ?? 0,
 			]),
 		);
+		const previousMachineRates = new Map(
+			availableServices.value.flatMap((service) =>
+				(service.machines ?? []).map((machine) => [
+					`${service.name}|${machine.id}`,
+					machine.admitted_eps_5s ?? 0,
+				] as const),
+			),
+		);
 		const sortedServices = sortServices(services);
 		const availableServiceNames = new Set(
 			sortedServices.map((service) => service.name),
@@ -126,6 +134,11 @@ export const useSystemStore = defineStore("system", () => {
 		availableServices.value = sortedServices.map((service) => ({
 			...service,
 			admitted_eps_5s: previousRates.get(service.name) ?? 0,
+			machines: (service.machines ?? []).map((machine) => ({
+				...machine,
+				admitted_eps_5s:
+					previousMachineRates.get(`${service.name}|${machine.id}`) ?? 0,
+			})),
 		}));
 		selectedDashboardServices.value = selectedDashboardServices.value.filter(
 			(serviceName) => availableServiceNames.has(serviceName),
@@ -155,15 +168,15 @@ export const useSystemStore = defineStore("system", () => {
 	}
 
 	function applyServiceRates(payload: ServiceRatesPayload): void {
-		const rateByName = new Map(
-			(payload.services ?? []).map((service) => [
-				service.name,
-				service.admitted_eps_5s ?? 0,
-			]),
-		);
+		const rateByName = new Map((payload.services ?? []).map((service) => [service.name, service]));
 		availableServices.value = availableServices.value.map((service) => ({
 			...service,
-			admitted_eps_5s: rateByName.get(service.name) ?? 0,
+			admitted_eps_5s: rateByName.get(service.name)?.admitted_eps_5s ?? 0,
+			machines: (rateByName.get(service.name)?.machines ?? service.machines ?? []).map(
+				(machine) => ({
+					...machine,
+				}),
+			),
 		}));
 	}
 
@@ -291,6 +304,8 @@ export const useSystemStore = defineStore("system", () => {
 						normalizeTempEvent({
 							...(message.data as TempEventData),
 							service_name: message.service_name,
+							machine_id: message.machine_id,
+							machine_name: message.machine_name,
 						}),
 					);
 					continue;
@@ -300,6 +315,8 @@ export const useSystemStore = defineStore("system", () => {
 						normalizeValveEvent({
 							...(message.data as ValveEventData),
 							service_name: message.service_name,
+							machine_id: message.machine_id,
+							machine_name: message.machine_name,
 						}),
 					);
 				}
@@ -310,6 +327,8 @@ export const useSystemStore = defineStore("system", () => {
 					normalizeMLAlert({
 						...(message.data as MLAnomalyPayload),
 						service_name: message.service_name,
+						machine_id: message.machine_id,
+						machine_name: message.machine_name,
 					}),
 				);
 			}

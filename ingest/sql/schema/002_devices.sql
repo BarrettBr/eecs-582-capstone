@@ -1,6 +1,8 @@
 -- +goose Up
 CREATE TABLE temp_samples (
     id INTEGER PRIMARY KEY,
+    service_name TEXT NOT NULL,
+    machine_id TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
     sensor_type TEXT NOT NULL,
     sensor_number INTEGER NOT NULL,
@@ -9,6 +11,7 @@ CREATE TABLE temp_samples (
     heater_power REAL NOT NULL
 );
 CREATE INDEX idx_temp_samples_timestamp ON temp_samples(timestamp);
+CREATE INDEX idx_temp_samples_service_machine_time ON temp_samples(service_name, machine_id, timestamp);
 
 CREATE TABLE temp_sample_anomalies (
     id INTEGER PRIMARY KEY,

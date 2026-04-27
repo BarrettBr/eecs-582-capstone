@@ -46,9 +46,12 @@ import (
 
 // IngressEvent is the normalized event envelope shared across services, buffering, and fanout.
 type IngressEvent struct {
-	SourceName string
-	MLEnabled  bool
-	Record     ingestevents.RecordEvent
+	SourceName  string
+	ServiceName string
+	MachineID   string
+	MachineName string
+	MLEnabled   bool
+	Record      ingestevents.RecordEvent
 }
 
 type PipelineDependencies struct {

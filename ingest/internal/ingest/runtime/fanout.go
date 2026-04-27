@@ -61,6 +61,7 @@ type mlBatchRequest struct {
 
 type mlBatchKey struct {
 	ServiceName string
+	MachineID   string
 	EventType   string
 }
 
@@ -184,8 +185,13 @@ func (p *Pipeline) deliverMLBatch(ctx context.Context, batch []IngressEvent) err
 		if !event.MLEnabled || event.SourceName == "" {
 			continue
 		}
+		serviceName := event.ServiceName
+		if serviceName == "" {
+			serviceName = event.SourceName
+		}
 		key := mlBatchKey{
-			ServiceName: event.SourceName,
+			ServiceName: serviceName,
+			MachineID:   event.MachineID,
 			EventType:   event.Record.EventType(),
 		}
 		grouped[key] = append(grouped[key], event.Record.Payload())
@@ -317,6 +323,8 @@ func (p *Pipeline) deliverSQLBatch(ctx context.Context, batch []IngressEvent) er
 func persistTempSample(ctx context.Context, qtx *database.Queries, sample ingestevents.TempSample) error {
 	timestampUnix := sampleUnixTimestamp(sample.TimestampMs, sample.Timestamp)
 	result, err := qtx.InsertTempSample(ctx, database.InsertTempSampleParams{
+		ServiceName:  sample.ServiceName,
+		MachineID:    sample.MachineID,
 		Timestamp:    timestampUnix,
 		SensorType:   sample.SensorType,
 		SensorNumber: int64(sample.SensorNumber),
@@ -348,6 +356,8 @@ func persistTempSample(ctx context.Context, qtx *database.Queries, sample ingest
 func persistValveSample(ctx context.Context, qtx *database.Queries, sample ingestevents.ValveSample) error {
 	timestampUnix := sampleUnixTimestamp(sample.TimestampMs, sample.Timestamp)
 	result, err := qtx.InsertValveSample(ctx, database.InsertValveSampleParams{
+		ServiceName: sample.ServiceName,
+		MachineID:   sample.MachineID,
 		Timestamp:   timestampUnix,
 		SensorType:  sample.SensorType,
 		ValveNumber: int64(sample.ValveNumber),
@@ -443,7 +453,11 @@ func (p *Pipeline) deliverToWebsocket(_ context.Context, event IngressEvent) err
 		return fmt.Errorf("encode websocket payload: %w", err)
 	}
 
-	p.streamer.PublishScopedEvent(event.Record.EventType(), event.SourceName, payload, timestamp)
+	serviceName := event.ServiceName
+	if serviceName == "" {
+		serviceName = event.SourceName
+	}
+	p.streamer.PublishScopedEvent(event.Record.EventType(), serviceName, event.MachineID, event.MachineName, payload, timestamp)
 	return nil
 }
 

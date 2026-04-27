@@ -64,6 +64,8 @@ type Message struct {
 	EventType   string          `json:"event_type,omitempty"`
 	Source      string          `json:"source"`
 	ServiceName string          `json:"service_name,omitempty"`
+	MachineID   string          `json:"machine_id,omitempty"`
+	MachineName string          `json:"machine_name,omitempty"`
 	Timestamp   string          `json:"timestamp"`
 	Data        json.RawMessage `json:"data"`
 }
@@ -83,10 +85,25 @@ type ClientSession struct {
 
 // ServiceCatalogEntry is one selectable ingest service exposed to websocket clients.
 type ServiceCatalogEntry struct {
-	Name      string `json:"name"`
-	AliasName string `json:"alias_name,omitempty"`
-	Mode      string `json:"mode"`
-	EventType string `json:"event_type"`
+	Name         string                `json:"name"`
+	AliasName    string                `json:"alias_name,omitempty"`
+	Mode         string                `json:"mode"`
+	EventType    string                `json:"event_type"`
+	MachineCount int                   `json:"machine_count,omitempty"`
+	Machines     []ServiceMachineEntry `json:"machines,omitempty"`
+}
+
+type ServiceMachineEntry struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name,omitempty"`
+	ServiceName    string  `json:"service_name"`
+	InstanceName   string  `json:"instance_name"`
+	LifecycleState string  `json:"lifecycle_state"`
+	Connected      bool    `json:"connected"`
+	RecentAlerts   int     `json:"recent_alerts"`
+	AdmittedEvents uint64  `json:"admitted_events"`
+	AdmittedEPS5s  float64 `json:"admitted_eps_5s,omitempty"`
+	LastAnomalyAt  string  `json:"last_anomaly_at,omitempty"`
 }
 
 // ServiceCatalogPayload is the service list snapshot broadcast to websocket clients.

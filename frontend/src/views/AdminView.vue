@@ -422,6 +422,7 @@ function createDefaultSimulatorSettings(
 		interval: "100ms",
 		seed: 42 + index,
 		profile: defaultSimulatorProfile(eventType),
+		machine_count: 3,
 	};
 }
 
@@ -1300,6 +1301,14 @@ function anomalyRuleKey(rule: AdminAnomalyRule, index: number): string {
 										<input
 											v-model="selectedService.simulator.profile"
 											type="text"
+										/>
+									</label>
+									<label class="field">
+										<span>Machine Count</span>
+										<input
+											v-model.number="selectedService.simulator.machine_count"
+											type="number"
+											min="1"
 										/>
 									</label>
 								</div>

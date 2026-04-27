@@ -33,24 +33,44 @@ Known Faults:
 import "time"
 
 type ServiceStatus struct {
-	Name                 string        `json:"name"`
-	AliasName            string        `json:"alias_name,omitempty"`
-	Mode                 string        `json:"mode"`
-	EventType            string        `json:"event_type"`
-	LifecycleState       string        `json:"lifecycle_state"`
-	ReservedUnits        int           `json:"reserved_units"`
-	BufferedUnits        int           `json:"buffered_units"`
-	QueueDepth           int           `json:"queue_depth"`
-	AdmittedEvents       uint64        `json:"admitted_events"`
-	AdaptiveEnabled      bool          `json:"adaptive_enabled"`
-	SupportsBackpressure bool          `json:"supports_backpressure"`
-	RateReduced          bool          `json:"rate_reduced"`
-	Sampling             bool          `json:"sampling"`
-	CurrentInterval      time.Duration `json:"current_interval"`
-	DroppedEvents        uint64        `json:"dropped_events"`
-	EvictedEvents        uint64        `json:"evicted_events"`
-	SampledEvents        uint64        `json:"sampled_events"`
-	LastError            string        `json:"last_error,omitempty"`
+	Name                 string          `json:"name"`
+	AliasName            string          `json:"alias_name,omitempty"`
+	InstanceName         string          `json:"instance_name,omitempty"`
+	MachineID            string          `json:"machine_id,omitempty"`
+	MachineName          string          `json:"machine_name,omitempty"`
+	Mode                 string          `json:"mode"`
+	EventType            string          `json:"event_type"`
+	LifecycleState       string          `json:"lifecycle_state"`
+	Connected            bool            `json:"connected"`
+	MachineCount         int             `json:"machine_count"`
+	RecentAlertCount     int             `json:"recent_alert_count"`
+	LastAnomalyAt        string          `json:"last_anomaly_at,omitempty"`
+	ReservedUnits        int             `json:"reserved_units"`
+	BufferedUnits        int             `json:"buffered_units"`
+	QueueDepth           int             `json:"queue_depth"`
+	AdmittedEvents       uint64          `json:"admitted_events"`
+	AdaptiveEnabled      bool            `json:"adaptive_enabled"`
+	SupportsBackpressure bool            `json:"supports_backpressure"`
+	RateReduced          bool            `json:"rate_reduced"`
+	Sampling             bool            `json:"sampling"`
+	CurrentInterval      time.Duration   `json:"current_interval"`
+	DroppedEvents        uint64          `json:"dropped_events"`
+	EvictedEvents        uint64          `json:"evicted_events"`
+	SampledEvents        uint64          `json:"sampled_events"`
+	LastError            string          `json:"last_error,omitempty"`
+	Machines             []MachineStatus `json:"machines,omitempty"`
+}
+
+type MachineStatus struct {
+	ID             string `json:"id"`
+	Name           string `json:"name,omitempty"`
+	ServiceName    string `json:"service_name"`
+	InstanceName   string `json:"instance_name"`
+	LifecycleState string `json:"lifecycle_state"`
+	Connected      bool   `json:"connected"`
+	RecentAlerts   int    `json:"recent_alerts"`
+	AdmittedEvents uint64 `json:"admitted_events"`
+	LastAnomalyAt  string `json:"last_anomaly_at,omitempty"`
 }
 
 type SystemStatusSnapshot struct {
